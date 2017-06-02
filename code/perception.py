@@ -45,6 +45,16 @@ def rover_coords(binary_img):
     y_pixel = -(xpos - binary_img.shape[0]).astype(np.float)
     return x_pixel, y_pixel
 
+# Trim the list to be in the forward light cone and limited distance
+# This is used to trim out out the non ground that we use for cannyon wall detection
+def trim_coords(x_pixel, y_pixel, distance):
+    # trim the list to only include the view cone, and also, not too far away
+    # We will not trust distant pixels for mapping so we trim them here
+    yx = [(y, x) for (y, x) in zip(y_pixel, x_pixel) if x < distance and abs(y) < x]
+    y_pixel = np.float32([y for (y, x) in yx])
+    x_pixel = np.float32([x for (y, x) in yx])
+    return x_pixel, y_pixel
+
 
 # Define a function to convert to radial coords in rover space
 def to_polar_coords(x_pixel, y_pixel):
@@ -153,26 +163,41 @@ def perception_step(Rover):
 		      [Rover.img.shape[1]/2 - dst_size, Rover.img.shape[0] - 2*dst_size - bottom_offset],
 		      ])
     # print("destination is:", destination)
+    # destination is: [[ 155.  154.]
+                     # [ 165.  154.]
+                     # [ 165.  144.]
+                     # [ 155.  144.]]
+
 
     # 2) Apply perspective transform
     warped = perspect_transform(Rover.img, source, destination)
     ground_rgb_thresh=(198,180,160)
-    rock_rgb_thresh=(100,100,100)
+    ground_rgb_thresh=(190,170,160)
+    rock_rgb_thresh=(150,150,100)
     threshed = color_thresh(warped, rgb_thresh=ground_rgb_thresh)
     rock = rock_thresh(warped, rgb_thresh=rock_rgb_thresh)
     wall = (1 - threshed[:,:]) * (1 - rock[:,:])
     xpix, ypix = rover_coords(threshed)
+    xpix, ypix = trim_coords(xpix, ypix, 100)
     rxpix, rypix = rover_coords(rock)
     wxpix, wypix = rover_coords(wall)
+    wxpix, wypix = trim_coords(wxpix, wypix, 80)
     # 3) Apply color threshold to identify navigable terrain/obstacles/rock samples
     # 4) Update Rover.vision_image (this will be displayed on left side of screen)
         # Example: Rover.vision_image[:,:,0] = obstacle color-thresholded binary image
         #          Rover.vision_image[:,:,1] = rock_sample color-thresholded binary image
         #          Rover.vision_image[:,:,2] = navigable terrain color-thresholded binary image
 
-    Rover.vision_image[:,:,:] = Rover.img[:,:,:]
 
-    if 1:
+    if 1: # overlay threshold ground on camara image
+        Rover.vision_image[:,:,:] = Rover.img[:,:,:]
+        Rover.vision_image[:,:,0] = threshed[:,:] * 255
+
+    if 0: # Show warped image
+        Rover.vision_image[:,:,:] = warped[:,:,:]
+
+    if 0: # color classified camara image
+        # Rover.vision_image[:,:,:] = Rover.img[:,:,:]
         threshed_img = color_thresh(Rover.img, rgb_thresh=ground_rgb_thresh)
         rock_img = rock_thresh(Rover.img, rgb_thresh=rock_rgb_thresh)
         # Whatever is not ground and rock, is wall
@@ -202,16 +227,17 @@ def perception_step(Rover):
     ## Note after the above mapping, there will be duplicate x,y world pixels due to mapping from
     ## from 10x10 threshold grid to 1x1 world grid
 
-    ## OK, Simple first.  Sum up counts of pixels in each world grid for all three types
-    world_cnt = np.zeros_like(Rover.worldmap[:,:,:])
-    for i in range(len(wxpix_world)):
-        world_cnt[wxpix_world[i]][wypix_world[i]][0] += 1 # wall
-    for i in range(len(rxpix_world)):
-        world_cnt[rxpix_world[i]][rypix_world[i]][1] += 1 # yellow rock
-    for i in range(len(xpix_world)):
-        world_cnt[xpix_world[i]][ypix_world[i]][2] += 1 # safe ground
+    if 0:
+        ## OK, Simple first.  Sum up counts of pixels in each world grid for all three types
+        world_cnt = np.zeros_like(Rover.worldmap[:,:,:])
+        for i in range(len(wxpix_world)):
+            world_cnt[wxpix_world[i]][wypix_world[i]][0] += 1 # wall
+        for i in range(len(rxpix_world)):
+            world_cnt[rxpix_world[i]][rypix_world[i]][1] += 1 # yellow rock
+        for i in range(len(xpix_world)):
+            world_cnt[xpix_world[i]][ypix_world[i]][2] += 1 # safe ground
 
-    if 1:
+    if 0:
         for x in range(world_size):
             for y in range(world_size):
                 w = world_cnt[x][y][0] # dangerous wall
@@ -226,6 +252,15 @@ def perception_step(Rover):
                         Rover.worldmap[y,x,2] = 0
                 if r > 10:
                     Rover.worldmap[y,x,1] = 255
+    if 1:
+        Rover.worldmap[wypix_world, wxpix_world, 0] = 0.5
+        Rover.worldmap[ypix_world, xpix_world, 2] = 1
+        Rover.worldmap[rypix_world, rxpix_world, 1] = 1
+
+    if 0:
+        Rover.worldmap[wypix_world, wxpix_world, 0] += 0.5
+        Rover.worldmap[rypix_world, rxpix_world, 1] += 1
+        Rover.worldmap[ypix_world, xpix_world, 2] += 1
 
     # 5) Convert map image pixel values to rover-centric coords
     # 6) Convert rover-centric pixel values to world coordinates
@@ -233,45 +268,6 @@ def perception_step(Rover):
         # Example: Rover.worldmap[obstacle_y_world, obstacle_x_world, 0] += 1
         #          Rover.worldmap[rock_y_world, rock_x_world, 1] += 1
         #          Rover.worldmap[navigable_y_world, navigable_x_world, 2] += 1
-
-    if 0:
-        for i in range(len(xpix_world)):
-            ## distance squared from rover for this pixel
-            dist_rov = math.sqrt(xpix[i]**2 + ypix[i]**2)
-            trust = 1.0
-            d = dist_rov
-            if 0:
-                while d > 20:
-                    trust /= 2.0
-                    d -= 20
-               ## print("dist {}, trust={} x{}y{}".format(dist_rov, trust, xpix[i], ypix[i]))
-
-    ## Note after the above mapping, there will be duplicate x,y world pixels due to mapping from
-    ## from 10x10 threshold grid to 1x1 world grid
-
-    # 5) Convert map image pixel values to rover-centric coords
-    # 6) Convert rover-centric pixel values to world coordinates
-    # 7) Update Rover worldmap (to be displayed on right side of screen)
-        # Example: Rover.worldmap[obstacle_y_world, obstacle_x_world, 0] += 1
-        #          Rover.worldmap[rock_y_world, rock_x_world, 1] += 1
-        #          Rover.worldmap[navigable_y_world, navigable_x_world, 2] += 1
-
-    if 0:
-        for i in range(len(xpix_world)):
-            ## distance squared from rover for this pixel
-            dist_rov = math.sqrt(xpix[i]**2 + ypix[i]**2)
-            trust = 1.0
-            d = dist_rov
-            if 0:
-                while d > 20:
-                    trust /= 2.0
-                    d -= 20
-               ## print("dist {}, trust={} x{}y{}".format(dist_rov, trust, xpix[i], ypix[i]))
-            Rover.worldmap[ypix_world[i], xpix_world[i], 2] = min(Rover.worldmap[ypix_world[i], xpix_world[i], 0]+trust, 255.0)
-        if 1:
-            if dist_rov < 20:
-                old = Rover.worldmap[ypix_world[i], xpix_world[i], 2] 
-                Rover.worldmap[ypix_world[i], xpix_world[i], 2] += (255 - old) * 0.1
 
     # 8) Convert rover-centric pixel positions to polar coordinates
     # Update Rover pixel distances and angles
