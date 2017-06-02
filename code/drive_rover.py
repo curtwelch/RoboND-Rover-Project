@@ -70,6 +70,8 @@ class RoverState():
         # Update this image with the positions of navigable terrain
         # obstacles and rock samples
         self.worldmap = np.zeros((200, 200, 3), dtype=np.float) 
+        self.probmap = np.zeros((200, 200, 3), dtype=np.float) ## probablity map (Curt W)
+        self.probmap[:,:,0] = 1.0 ## assume all is a collision until proven otherwise
         self.samples_pos = None # To store the actual sample positions
         self.samples_to_find = 0 # To store the initial count of samples
         self.samples_found = 0 # To count the number of samples found

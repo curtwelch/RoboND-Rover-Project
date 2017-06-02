@@ -4,6 +4,7 @@ from PIL import Image
 from io import BytesIO, StringIO
 import base64
 import time
+import sys
 
 # Define a function to convert telemetry strings to float independent of decimal convention
 def convert_to_float(string_to_convert):
@@ -18,9 +19,12 @@ def update_rover(Rover, data):
       if Rover.start_time == None:
             Rover.start_time = time.time()
             Rover.total_time = 0
-            samples_xpos = np.int_([convert_to_float(pos.strip()) for pos in data["samples_x"].split(';')])
-            samples_ypos = np.int_([convert_to_float(pos.strip()) for pos in data["samples_y"].split(';')])
+            samples_xpos = np.int_([convert_to_float(pos.strip()) for pos in data["samples_x"].split(',')]) # cw change to ,
+            samples_ypos = np.int_([convert_to_float(pos.strip()) for pos in data["samples_y"].split(',')]) # cw change to ,
             Rover.samples_pos = (samples_xpos, samples_ypos)
+            #print("Init samples_x is", data["samples_x"]);
+            #print("Init sample_xpos is", samples_xpos);
+            #sys.exit(0)
             Rover.samples_to_find = np.int(data["sample_count"])
       # Or just update elapsed time
       else:
@@ -32,7 +36,8 @@ def update_rover(Rover, data):
       # The current speed of the rover in m/s
       Rover.vel = convert_to_float(data["speed"])
       # The current position of the rover
-      Rover.pos = [convert_to_float(pos.strip()) for pos in data["position"].split(';')]
+      # CW had to change ; to , to make this work in my system...
+      Rover.pos = [convert_to_float(pos.strip()) for pos in data["position"].split(',')]
       # The current yaw angle of the rover
       Rover.yaw = convert_to_float(data["yaw"])
       # The current yaw angle of the rover
@@ -93,6 +98,7 @@ def create_output_images(Rover):
       # to confirm whether detections are real
       if rock_world_pos[0].any():
             rock_size = 2
+            print("Rover.samples_pos is", Rover.samples_pos)
             for idx in range(len(Rover.samples_pos[0])):
                   test_rock_x = Rover.samples_pos[0][idx]
                   test_rock_y = Rover.samples_pos[1][idx]
