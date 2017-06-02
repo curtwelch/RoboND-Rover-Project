@@ -274,6 +274,6 @@ def perception_step(Rover):
         # Rover.nav_dists = rover_centric_pixel_distances
         # Rover.nav_angles = rover_centric_angles
 
-    Rover.nav_dist, Rover.nav_angles = to_polar_coords(xpix, ypix)
+    Rover.nav_dists, Rover.nav_angles = to_polar_coords(xpix, ypix)
 
     return Rover
