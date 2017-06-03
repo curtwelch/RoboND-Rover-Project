@@ -3,6 +3,14 @@ import cv2
 import math
 import sys
 
+# return the mean distances and mean angles for a list of polar (dist, angle) points
+# Needed this function to deal with null lists correclty
+def vector_means(v):
+    if len(v) == 0:
+        return 0.0, 0.0
+    m = np.mean(v, axis=0)
+    return m[0], m[1]
+
 # Identify pixels above the threshold
 # Threshold of RGB > 160 does a nice job of identifying ground pixels only
 def color_thresh(img, rgb_thresh=(160, 160, 160)):
@@ -144,8 +152,22 @@ def map_image(img):
             map_img[x][y] = pixel_classify(img[x][y])
     return map_img
 
+# Skip every other frame to solve CPU problems...
+global skip_this_step
+skip_this_step = True
+
 # Apply the above functions in succession and update the Rover state accordingly
 def perception_step(Rover):
+
+    global skip_this_step
+    skip_this_step = not skip_this_step
+
+    if skip_this_step:
+        print("NOT RUNNING perception_step()")
+        return Rover
+
+    print("RUNNING perception_step()")
+
     # Perform perception steps to update Rover()
     # TODO: 
     # NOTE: camera image is coming to you in Rover.img
@@ -171,17 +193,28 @@ def perception_step(Rover):
 
     # 2) Apply perspective transform
     warped = perspect_transform(Rover.img, source, destination)
+
     ground_rgb_thresh=(198,180,160)
     ground_rgb_thresh=(190,170,160)
+
     rock_rgb_thresh=(150,150,100)
+    rock_rgb_thresh=(80,80,30)
+
     threshed = color_thresh(warped, rgb_thresh=ground_rgb_thresh)
     rock = rock_thresh(warped, rgb_thresh=rock_rgb_thresh)
+
+    if 0:
+        ypos, xpos = rock.nonzero()
+        for i in range(len(ypos)):
+            print("ROCK rock pix", warped[ypos[i]][xpos[i]])
+
     wall = (1 - threshed[:,:]) * (1 - rock[:,:])
     xpix, ypix = rover_coords(threshed)
     xpix, ypix = trim_coords(xpix, ypix, 100)
     rxpix, rypix = rover_coords(rock)
     wxpix, wypix = rover_coords(wall)
     wxpix, wypix = trim_coords(wxpix, wypix, 80)
+
     # 3) Apply color threshold to identify navigable terrain/obstacles/rock samples
     # 4) Update Rover.vision_image (this will be displayed on left side of screen)
         # Example: Rover.vision_image[:,:,0] = obstacle color-thresholded binary image
@@ -210,6 +243,11 @@ def perception_step(Rover):
         Rover.vision_image[:,:,0] = wall_img[:,:] * 255
         Rover.vision_image[:,:,1] = rock_img[:,:] * 255
         Rover.vision_image[:,:,2] = threshed_img[:,:] * 255
+
+        # Overlay ground map
+        Rover.vision_image[:,:,0] += threshed[:,:] * 0.5 * (255 - Rover.vision_image[:,:,0])
+        Rover.vision_image[:,:,1] += threshed[:,:] * 0.5 * (255 - Rover.vision_image[:,:,1])
+        Rover.vision_image[:,:,2] += threshed[:,:] * 0.5 * (255 - Rover.vision_image[:,:,2])
 
     if 0:
         map_img = map_image(Rover.img)
@@ -253,27 +291,86 @@ def perception_step(Rover):
                 if r > 10:
                     Rover.worldmap[y,x,1] = 255
     if 1:
-        Rover.worldmap[wypix_world, wxpix_world, 0] = 0.5
-        Rover.worldmap[ypix_world, xpix_world, 2] = 1
-        Rover.worldmap[rypix_world, rxpix_world, 1] = 1
+        var = 2         # deg varrance for trusting image data since we don't adjust for
+                        # pitch or roll
+        if (Rover.pitch < var or Rover.pitch > 360.0-var) and \
+            (Rover.roll < var or Rover.roll > 360.0-var):
+            # Only update map when the rover is near flat
+            Rover.worldmap[wypix_world, wxpix_world, 0] = 1
+            Rover.worldmap[rypix_world, rxpix_world, 1] = 1
+            Rover.worldmap[ypix_world, xpix_world, 2] = 1
 
     if 0:
         Rover.worldmap[wypix_world, wxpix_world, 0] += 0.5
         Rover.worldmap[rypix_world, rxpix_world, 1] += 1
         Rover.worldmap[ypix_world, xpix_world, 2] += 1
 
-    # 5) Convert map image pixel values to rover-centric coords
-    # 6) Convert rover-centric pixel values to world coordinates
-    # 7) Update Rover worldmap (to be displayed on right side of screen)
-        # Example: Rover.worldmap[obstacle_y_world, obstacle_x_world, 0] += 1
-        #          Rover.worldmap[rock_y_world, rock_x_world, 1] += 1
-        #          Rover.worldmap[navigable_y_world, navigable_x_world, 2] += 1
+    #
+    # Divide ground pixels into forward set, left set, an right set
+    # Useful, and kmportant, but kills CPU
+    #
+    
+    Rover.nav_dists, Rover.nav_angles = to_polar_coords(xpix, ypix) # (dists, angles)
+    Rover.nav_vectors = list(zip(Rover.nav_dists, Rover.nav_angles))
 
-    # 8) Convert rover-centric pixel positions to polar coordinates
-    # Update Rover pixel distances and angles
-        # Rover.nav_dists = rover_centric_pixel_distances
-        # Rover.nav_angles = rover_centric_angles
+    # Distance is in pixels not meters (10 pixels per meter)
 
-    Rover.nav_dists, Rover.nav_angles = to_polar_coords(xpix, ypix)
+    Rover.nav_l = [] # left nav vectors (angle, dist)
+    Rover.nav_f = [] # forward
+    Rover.nav_r = [] # right
+
+    if 1:
+        for v in Rover.nav_vectors:
+            # Calculate distance from center line
+            # we are one meter wide (10 pixels), so check path 1m wide forward.
+            # We don't attempt to adjust for a turning path.
+            dist, angle = v
+            if abs(math.sin(angle) * dist) <= 5:
+                Rover.nav_f.append(v)
+            elif angle > 0:
+                Rover.nav_l.append(v)
+            else:
+                Rover.nav_r.append(v)
+            
+    # Mean of distances and angels for all three sets
+
+    if 1:
+        Rover.nav_l_dists_mean, Rover.nav_l_angles_mean = vector_means(Rover.nav_l)
+        Rover.nav_f_dists_mean, Rover.nav_f_angles_mean = vector_means(Rover.nav_f)
+        Rover.nav_r_dists_mean, Rover.nav_r_angles_mean = vector_means(Rover.nav_r)
+
+    # We can calculate this from the above insted of scannig the data
+    # yet again. Just saying.
+    Rover.nav_dists_mean, Rover.nav_angles_mean = vector_means(Rover.nav_vectors)
+
+    # Set target safe velocity forward based on path forward
+    # will go to zero if mean path forward is too small
+
+    if 0:
+        print("total vectors", len(Rover.nav_vectors))
+        print("Path left  size={:5d} mean distance={:5.2f} mean angles={:5.2f}".format(len(Rover.nav_l), Rover.nav_l_dists_mean, Rover.nav_l_angles_mean))
+        print("Path for   size={:5d} mean distance={:5.2f} mean angles={:5.2f}".format(len(Rover.nav_f), Rover.nav_f_dists_mean, Rover.nav_f_angles_mean))
+        print("Path right size={:5d} mean distance={:5.2f} mean angles={:5.2f}".format(len(Rover.nav_r), Rover.nav_r_dists_mean, Rover.nav_r_angles_mean))
+
+    mean_dists = np.clip(Rover.nav_f_dists_mean-10, 0.0, 40.0)
+    # mean_dists = np.clip(Rover.nav_dists_mean-10, 0.0, 40.0)
+    Rover.target_vel = Rover.max_vel*2.0 * mean_dists / 40.0
+
+    print("Target_vel {:6.3f}".format(Rover.target_vel))
+
+    # Now the ROCKs!
+
+    Rover.nav_rock_dists, Rover.nav_rock_angles = to_polar_coords(rxpix, rypix) # (dists, angles)
+    Rover.nav_rock_vectors = list(zip(Rover.nav_rock_dists, Rover.nav_rock_angles))
+
+    Rover.nav_rock_dists_mean, Rover.nav_rock_angles_mean = vector_means(Rover.nav_rock_vectors)
+
+    if len(Rover.nav_rock_vectors) > 0:
+        print("SEE A ROCK AT {:6.2f} deg, {:6.2f} pix".format(Rover.nav_rock_angles_mean * 180.0/np.pi, Rover.nav_rock_dists_mean))
+    else:
+        print("NO ROCK")
+
+    # print("angle vectors", Rover.nav_rock_angles)
+    # print("distance vectors", Rover.nav_rock_dists)
 
     return Rover

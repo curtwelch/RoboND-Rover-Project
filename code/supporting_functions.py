@@ -32,7 +32,7 @@ def update_rover(Rover, data):
             if np.isfinite(tot_time):
                   Rover.total_time = tot_time
       # Print out the fields in the telemetry data dictionary
-      print(data.keys())
+      # print(data.keys())
       # The current speed of the rover in m/s
       Rover.vel = convert_to_float(data["speed"])
       # The current position of the rover
@@ -55,11 +55,12 @@ def update_rover(Rover, data):
       # Update number of rocks found
       Rover.samples_found = Rover.samples_to_find - np.int(data["sample_count"])
 
-      print('speed =',Rover.vel, 'position =', Rover.pos, 'throttle =', 
-      Rover.throttle, 'steer_angle =', Rover.steer, 'near_sample:', Rover.near_sample, 
-      'picking_up:', data["picking_up"], 'sending pickup:', Rover.send_pickup, 
-      'total time:', Rover.total_time, 'samples remaining:', data["sample_count"], 
-      'samples found:', Rover.samples_found)
+      if 0:
+          print('speed =',Rover.vel, 'position =', Rover.pos, 'throttle =', 
+          Rover.throttle, 'steer_angle =', Rover.steer, 'near_sample:', Rover.near_sample, 
+          'picking_up:', data["picking_up"], 'sending pickup:', Rover.send_pickup, 
+          'total time:', Rover.total_time, 'samples remaining:', data["sample_count"], 
+          'samples found:', Rover.samples_found)
       # Get the current image from the center camera of the rover
       imgString = data["image"]
       image = Image.open(BytesIO(base64.b64decode(imgString)))
@@ -98,7 +99,7 @@ def create_output_images(Rover):
       # to confirm whether detections are real
       if rock_world_pos[0].any():
             rock_size = 2
-            print("Rover.samples_pos is", Rover.samples_pos)
+            # print("Rover.samples_pos is", Rover.samples_pos)
             for idx in range(len(Rover.samples_pos[0])):
                   test_rock_x = Rover.samples_pos[0][idx]
                   test_rock_y = Rover.samples_pos[1][idx]

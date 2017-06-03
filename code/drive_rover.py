@@ -49,6 +49,7 @@ class RoverState():
         self.steer = 0 # Current steering angle
         self.throttle = 0 # Current throttle value
         self.brake = 0 # Current brake value
+        self.nav_vecgtors = None # list of vectors -- borken into angles and dists below
         self.nav_angles = None # Angles of navigable terrain pixels
         self.nav_dists = None # Distances of navigable terrain pixels
         self.ground_truth = ground_truth_3d # Ground truth worldmap
@@ -63,6 +64,7 @@ class RoverState():
         self.go_forward = 500 # Threshold to go forward again
         self.min_vel = 0.1 # Minimum forward driving velocity (meters/second)
         self.max_vel = 2 # Maximum velocity (meters/second)
+        self.target_vel = 0 # max safe forward velocity calcuated from vectors
         # Image output from perception step
         # Update this image to display your intermediate analysis steps
         # on screen in autonomous mode
