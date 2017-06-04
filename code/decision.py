@@ -2,7 +2,7 @@ import numpy as np
 import math
 
 def decision_set_stop(Rover):
-    print("MODE SET STOP")
+    print("SET MODE STOP")
     # Set mode to "stop" and hit the brakes!
     Rover.mode = 'stop'
     Rover.throttle = 0
@@ -12,6 +12,7 @@ def decision_set_stop(Rover):
     return Rover
 
 def decision_set_forward(Rover):
+    print("SET MODE FORWARD")
     # Just change to forward mode, we will decided what to
     # on next image frame
     Rover.mode = 'forward'
@@ -21,8 +22,8 @@ def decision_set_forward(Rover):
     Rover.brake = 0
     return Rover
 
-def decision_forward(Rover):
-    print("MODE decision_forward()")
+def decision_mode_forward(Rover):
+    # print("MODE decision_mode_forward()")
     # Rover.mode is 'forward': 
 
     # Regulate speed to Rover.target_vel
@@ -52,7 +53,7 @@ def decision_forward(Rover):
         # Throttle UP
         Rover.throttle = Rover.throttle_set
         Rover.brake = 0
-    elif Rover.vel > Rover.target_vel*1.1:
+    elif Rover.vel > Rover.target_vel*1.5:
         # Throttle off, break
         Rover.throttle = 0
         Rover.brake = 0.1 # light break
@@ -91,14 +92,14 @@ def decision_forward(Rover):
 
     return Rover
 
-def decision_stop(Rover):
-    print("MODE decision_stop()")
+def decision_mode_stop(Rover):
+    # print("MODE decision_mode_stop()")
     # If we're in stop mode but still moving keep braking
     if abs(Rover.vel) > 0.2:
         Rover.throttle = 0
         Rover.brake = Rover.brake_set
         Rover.steer = 0
-        print("STEER!  set to zero in stop mode")
+        #print("STEER!  set to zero in stop mode")
         return Rover
 
     # else we're not moving (vel < 0.2) then do something else
@@ -164,8 +165,14 @@ def decision_set_spin(Rover, spin_angle):
     return Rover
 
 # We are spinning looking for a better path
-def decision_spin(Rover):
-    print("MODE decision_spin()")
+def decision_mode_spin(Rover):
+    # print("MODE decision_mode_spin()")
+
+    # Needs to be reset eaach time because it's updated from
+    # server and can get reset to zero
+
+    Rover.steer = Rover.spin_angle
+    Rover.throttle = 0 # it gets reset at times by server also
 
     if Rover.near_sample:
         return decision_set_stop(Rover);
@@ -182,14 +189,6 @@ def decision_spin(Rover):
         # if the way forward is clear enough to allow 1.0 velocity
         return decision_set_stop(Rover);
 
-    # Stop spinning if we can move forward slowly and
-    # turning more doesn't help????
-
-    # Needs to be reset eaach time because it's updated from
-    # server and can get reset to zero
-
-    Rover.steer = Rover.spin_angle
-        
     return Rover
 
 
@@ -197,18 +196,31 @@ def decision_spin(Rover):
 # commands based on the output of the perception_step() function
 
 def decision_step(Rover):
+    start_mode = Rover.mode
+
+    r = decision_step2(Rover)
+
+    print("         MODE {:7s}  ".format(start_mode), end='')
+    print(" t:{:4.1f}   b:{:4.1f}   s:{:6.2f}".format(Rover.throttle, Rover.brake, Rover.steer), end='')
+    if Rover.mode != start_mode:
+        print(" -> ", Rover.mode, end='')
+    print()
+
+    return r
+
+def decision_step2(Rover):
 
     # Check if we have vision data to make decisions with
     if Rover.nav_angles is not None:
 
         if Rover.mode == 'forward': 
-            return decision_forward(Rover)
+            return decision_mode_forward(Rover)
 
         if Rover.mode == 'stop':
-            return decision_stop(Rover)
+            return decision_mode_stop(Rover)
 
         if Rover.mode == 'spin':
-            return decision_spin(Rover)
+            return decision_mode_spin(Rover)
 
         # No mode set?
         # Shoudn't happen, but just in case it doess..

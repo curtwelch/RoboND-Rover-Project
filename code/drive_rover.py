@@ -40,6 +40,7 @@ class RoverState():
     def __init__(self):
         self.start_time = None # To record the start time of navigation
         self.total_time = None # To record total duration of naviagation
+        self.fps = 0
         self.img = None # Current camera image
         self.pos = None # Current position (x, y)
         self.yaw = None # Current yaw angle
@@ -73,8 +74,6 @@ class RoverState():
         # Update this image with the positions of navigable terrain
         # obstacles and rock samples
         self.worldmap = np.zeros((200, 200, 3), dtype=np.float) 
-        self.probmap = np.zeros((200, 200, 3), dtype=np.float) ## probablity map (Curt W)
-        self.probmap[:,:,0] = 1.0 ## assume all is a collision until proven otherwise
         self.samples_pos = None # To store the actual sample positions
         self.samples_to_find = 0 # To store the initial count of samples
         self.samples_found = 0 # To count the number of samples found
@@ -103,12 +102,13 @@ def telemetry(sid, data):
         fps = frame_counter
         frame_counter = 0
         second_counter = time.time()
-    print("Current FPS: {}".format(fps))
+        #print("Current FPS: {}".format(fps))
 
     if data:
         global Rover
         # Initialize / update Rover with current telemetry
         Rover, image = update_rover(Rover, data)
+        Rover.fps = fps # pass alog to perception
 
         if np.isfinite(Rover.vel):
 

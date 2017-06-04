@@ -27,14 +27,12 @@ def color_thresh(img, rgb_thresh=(160, 160, 160)):
     # Return the binary image
     return color_select
 
-def rock_thresh(img, rgb_thresh=(160, 160, 75)):
+# detect rocks by looking for yellow
+def yellow_thresh(img, rgb_thresh=(100, 100, 75)):
     # Somewhat like color_thresh() but blue must be BELOW the value
     # for deteting yellow
     # Create an array of zeros same xy size as img, but single channel
     color_select = np.zeros_like(img[:,:,0])
-    # Require that each pixel be above all three threshold values in RGB
-    # above_thresh will now contain a boolean array with "True"
-    # where threshold was met
     above_thresh = (img[:,:,0] > rgb_thresh[0]) \
                 & (img[:,:,1] > rgb_thresh[1]) \
                 & (img[:,:,2] < rgb_thresh[2])
@@ -54,7 +52,7 @@ def rover_coords(binary_img):
     return x_pixel, y_pixel
 
 # Trim the list to be in the forward light cone and limited distance
-# This is used to trim out out the non ground that we use for cannyon wall detection
+# This is used to trim out the non ground that we use for cannyon wall detection
 def trim_coords(x_pixel, y_pixel, distance):
     # trim the list to only include the view cone, and also, not too far away
     # We will not trust distant pixels for mapping so we trim them here
@@ -163,10 +161,10 @@ def perception_step(Rover):
     skip_this_step = not skip_this_step
 
     if skip_this_step:
-        print("NOT RUNNING perception_step()")
+        # print("NOT RUNNING perception_step()")
         return Rover
 
-    print("RUNNING perception_step()")
+    # print("RUNNING perception_step()")
 
     # Perform perception steps to update Rover()
     # TODO: 
@@ -194,68 +192,69 @@ def perception_step(Rover):
     # 2) Apply perspective transform
     warped = perspect_transform(Rover.img, source, destination)
 
-    ground_rgb_thresh=(198,180,160)
-    ground_rgb_thresh=(190,170,160)
+    sand_rgb_thresh=(198,180,160)
+    sand_rgb_thresh=(190,170,160)
 
     rock_rgb_thresh=(150,150,100)
     rock_rgb_thresh=(80,80,30)
+    rock_rgb_thresh=(100,100,60)
 
-    threshed = color_thresh(warped, rgb_thresh=ground_rgb_thresh)
-    rock = rock_thresh(warped, rgb_thresh=rock_rgb_thresh)
+    sand = color_thresh(warped, rgb_thresh=sand_rgb_thresh)
+    rock = yellow_thresh(warped, rgb_thresh=rock_rgb_thresh)
 
-    if 0:
-        ypos, xpos = rock.nonzero()
-        for i in range(len(ypos)):
-            print("ROCK rock pix", warped[ypos[i]][xpos[i]])
-
-    wall = (1 - threshed[:,:]) * (1 - rock[:,:])
-    xpix, ypix = rover_coords(threshed)
-    xpix, ypix = trim_coords(xpix, ypix, 100)
+    wall = (1 - sand[:,:]) * (1 - rock[:,:])
+    sxpix, sypix = rover_coords(sand)
+    sxpix, sypix = trim_coords(sxpix, sypix, 100)
     rxpix, rypix = rover_coords(rock)
     wxpix, wypix = rover_coords(wall)
     wxpix, wypix = trim_coords(wxpix, wypix, 80)
 
-    # 3) Apply color threshold to identify navigable terrain/obstacles/rock samples
-    # 4) Update Rover.vision_image (this will be displayed on left side of screen)
-        # Example: Rover.vision_image[:,:,0] = obstacle color-thresholded binary image
-        #          Rover.vision_image[:,:,1] = rock_sample color-thresholded binary image
-        #          Rover.vision_image[:,:,2] = navigable terrain color-thresholded binary image
-
+    #
+    # ROVER VISION DISPLAY
+    #
 
     if 1: # overlay threshold ground on camara image
         Rover.vision_image[:,:,:] = Rover.img[:,:,:]
-        Rover.vision_image[:,:,0] = threshed[:,:] * 255
+        Rover.vision_image[:,:,0] = sand[:,:] * 255
+        #Rover.vision_image[:,:,1] = wall[:,:] * 255
+        Rover.vision_image[:,:,2] = rock[:,:] * 255
+        Rover.vision_image[150-np.int32(sxpix),150-np.int32(sypix),2] = 200
 
     if 0: # Show warped image
         Rover.vision_image[:,:,:] = warped[:,:,:]
 
     if 0: # color classified camara image
-        # Rover.vision_image[:,:,:] = Rover.img[:,:,:]
+        #Rover.vision_image[:,:,:] = Rover.img[:,:,:]
         threshed_img = color_thresh(Rover.img, rgb_thresh=ground_rgb_thresh)
-        rock_img = rock_thresh(Rover.img, rgb_thresh=rock_rgb_thresh)
+        rock_img = yellow_thresh(Rover.img, rgb_thresh=rock_rgb_thresh)
         # Whatever is not ground and rock, is wall
-        wall_img = (1 - threshed_img[:,:]) * (1 -rock_img[:,:])
-        image_ratio = 0.2 # Image is 20%
-        color = 255 * (1.0-image_ratio)
+        #wall_img = (1 - threshed_img[:,:]) * (1 -rock_img[:,:])
+        #image_ratio = 0.2 # Image is 20%
+        #color = 255 * (1.0-image_ratio)
         ## Rover.vision_image[:,:,0] += (wall_img[:,:] * (color - (image_ratio * Rover.vision_image[:,:,0]))).astype(int)
         ## Rover.vision_image[:,:,1] += (rock_img[:,:] * (color - (image_ratio * Rover.vision_image[:,:,1]))).astype(int)
         ## Rover.vision_image[:,:,2] += (threshed_img[:,:] * (color - (image_ratio * Rover.vision_image[:,:,2]))).astype(int)
-        Rover.vision_image[:,:,0] = wall_img[:,:] * 255
+        #Rover.vision_image[:,:,0] = wall_img[:,:] * 255
         Rover.vision_image[:,:,1] = rock_img[:,:] * 255
         Rover.vision_image[:,:,2] = threshed_img[:,:] * 255
 
-        # Overlay ground map
-        Rover.vision_image[:,:,0] += threshed[:,:] * 0.5 * (255 - Rover.vision_image[:,:,0])
-        Rover.vision_image[:,:,1] += threshed[:,:] * 0.5 * (255 - Rover.vision_image[:,:,1])
-        Rover.vision_image[:,:,2] += threshed[:,:] * 0.5 * (255 - Rover.vision_image[:,:,2])
+        if 0:
+            # Overlay warrped ground map
+            Rover.vision_image[:,:,0] += sand[:,:] * 0.5 * (255 - Rover.vision_image[:,:,0])
+            Rover.vision_image[:,:,1] += sand[:,:] * 0.5 * (255 - Rover.vision_image[:,:,1])
+            Rover.vision_image[:,:,2] += sand[:,:] * 0.5 * (255 - Rover.vision_image[:,:,2])
 
     if 0:
         map_img = map_image(Rover.img)
         Rover.vision_image[:,:,:] = map_img[:,:,:]
 
+    #
+    # Map rover pixel relative points to the world map grid points
+    #
+
     world_size = 200
     scale = 10.0
-    xpix_world, ypix_world = pix_to_world(xpix, ypix, Rover.pos[0],
+    sxpix_world, sypix_world = pix_to_world(sxpix, sypix, Rover.pos[0],
                                           Rover.pos[1], Rover.yaw, world_size, scale)
     rxpix_world, rypix_world = pix_to_world(rxpix, rypix, Rover.pos[0],
                                           Rover.pos[1], Rover.yaw, world_size, scale)
@@ -265,52 +264,26 @@ def perception_step(Rover):
     ## Note after the above mapping, there will be duplicate x,y world pixels due to mapping from
     ## from 10x10 threshold grid to 1x1 world grid
 
-    if 0:
-        ## OK, Simple first.  Sum up counts of pixels in each world grid for all three types
-        world_cnt = np.zeros_like(Rover.worldmap[:,:,:])
-        for i in range(len(wxpix_world)):
-            world_cnt[wxpix_world[i]][wypix_world[i]][0] += 1 # wall
-        for i in range(len(rxpix_world)):
-            world_cnt[rxpix_world[i]][rypix_world[i]][1] += 1 # yellow rock
-        for i in range(len(xpix_world)):
-            world_cnt[xpix_world[i]][ypix_world[i]][2] += 1 # safe ground
+    #
+    # Update World map from pixel data
+    #
 
-    if 0:
-        for x in range(world_size):
-            for y in range(world_size):
-                w = world_cnt[x][y][0] # dangerous wall
-                r = world_cnt[x][y][1] # yellow rock
-                g = world_cnt[x][y][2] # safe ground
-                if w+g > 0:
-                    if g >= w:
-                        Rover.worldmap[y,x,0] = 0
-                        Rover.worldmap[y,x,2] = 255
-                    elif w > g:
-                        Rover.worldmap[y,x,0] = 255
-                        Rover.worldmap[y,x,2] = 0
-                if r > 10:
-                    Rover.worldmap[y,x,1] = 255
     if 1:
+        # Only update world map when the rover is near flat
         var = 2         # deg varrance for trusting image data since we don't adjust for
                         # pitch or roll
         if (Rover.pitch < var or Rover.pitch > 360.0-var) and \
             (Rover.roll < var or Rover.roll > 360.0-var):
-            # Only update map when the rover is near flat
-            Rover.worldmap[wypix_world, wxpix_world, 0] = 1
-            Rover.worldmap[rypix_world, rxpix_world, 1] = 1
-            Rover.worldmap[ypix_world, xpix_world, 2] = 1
-
-    if 0:
-        Rover.worldmap[wypix_world, wxpix_world, 0] += 0.5
-        Rover.worldmap[rypix_world, rxpix_world, 1] += 1
-        Rover.worldmap[ypix_world, xpix_world, 2] += 1
+                Rover.worldmap[wypix_world, wxpix_world, 0] = 1
+                Rover.worldmap[rypix_world, rxpix_world, 1] = 1
+                Rover.worldmap[sypix_world, sxpix_world, 2] = 1
 
     #
     # Divide ground pixels into forward set, left set, an right set
     # Useful, and kmportant, but kills CPU
     #
     
-    Rover.nav_dists, Rover.nav_angles = to_polar_coords(xpix, ypix) # (dists, angles)
+    Rover.nav_dists, Rover.nav_angles = to_polar_coords(sxpix, sypix) # (dists, angles)
     Rover.nav_vectors = list(zip(Rover.nav_dists, Rover.nav_angles))
 
     # Distance is in pixels not meters (10 pixels per meter)
@@ -356,7 +329,6 @@ def perception_step(Rover):
     # mean_dists = np.clip(Rover.nav_dists_mean-10, 0.0, 40.0)
     Rover.target_vel = Rover.max_vel*2.0 * mean_dists / 40.0
 
-    print("Target_vel {:6.3f}".format(Rover.target_vel))
 
     # Now the ROCKs!
 
@@ -365,10 +337,15 @@ def perception_step(Rover):
 
     Rover.nav_rock_dists_mean, Rover.nav_rock_angles_mean = vector_means(Rover.nav_rock_vectors)
 
+    if Rover.fps is not None:
+        print("")
+        print("FPS {:3d} ".format(Rover.fps), end='')
+    print("Target_vel {:6.3f}".format(Rover.target_vel), end='')
     if len(Rover.nav_rock_vectors) > 0:
-        print("SEE A ROCK AT {:6.2f} deg, {:6.2f} pix".format(Rover.nav_rock_angles_mean * 180.0/np.pi, Rover.nav_rock_dists_mean))
-    else:
-        print("NO ROCK")
+        print(" ----------------------------- ",
+            " ROCK AT {:6.2f} deg, {:6.2f} distx, {} pixels".format(Rover.nav_rock_angles_mean * 180.0/np.pi, Rover.nav_rock_dists_mean,
+            len(Rover.nav_rock_vectors)))
+    print("")
 
     # print("angle vectors", Rover.nav_rock_angles)
     # print("distance vectors", Rover.nav_rock_dists)
