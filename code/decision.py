@@ -32,16 +32,15 @@ def decision_mode_forward(Rover):
         # stop and grab rock!!
         return decision_set_stop(Rover)
 
-    if len(Rover.nav_rock_vectors) > 0:
+    if Rover.see_rock:
         # We wee a rock, but aren't close enough
         # Are we headed towareds it?  If so, keep going
         # if not, stop, and spin to turn towards it
-        print("SEE A ROCK, angle={:6.3f} distance={:6.3f}".format(Rover.nav_rock_angles_mean*180.0/np.pi, Rover.nav_rock_dists_mean))
         # We see a rock!!!  Stop and spin to point towards it
         print("SEE A ROCK SLOWDOWN")
         Rover.target_vel = max(Rover.target_vel, .999) # slowdown
-        a = Rover.nav_rock_angles_mean * 180 / np.pi
-        if abs(a) > 45: # Stop and spin
+        if abs(Rover.rock_angle) > 40: # Stop and spin
+            print("SEE A ROCK STOP AND SPIN")
             return decision_set_stop(Rover)
         # Otherwise, keep going forward and turn
 
@@ -56,7 +55,7 @@ def decision_mode_forward(Rover):
     elif Rover.vel > Rover.target_vel*1.5:
         # Throttle off, break
         Rover.throttle = 0
-        Rover.brake = 0.1 # light break
+        Rover.brake = Rover.brake_set / 2.0 # light brake
     else: # coast
         Rover.throttle = 0
         Rover.brake = 0
@@ -65,30 +64,19 @@ def decision_mode_forward(Rover):
     # Use follow the right wall logic to expore the environment
     # Use the anverage angle for the right and forward vectors to set
     # angle.
-    if 0:
-        both = Rover.nav_f + Rover.nav_r
-        if len(both) > 0:
-            Rover.steer = np.clip((np.mean(both, axis=0)[1] * 180/np.pi) / 2.0, -15, 15)
-        else:
-            Rover.steer = 0
     
-    if 1:
+    if Rover.see_rock:
+        Rover.steer = np.clip(Rover.rock_angle/2, -15, 15)
+        print("SEE A ROCK, steer to", Rover.steer)
+    else:
         # Set steering to average angle clipped to the range +/- 15
         if len(Rover.nav_angles) > 0:
-            a = np.clip(np.mean(Rover.nav_angles * 180/np.pi), -15, 15) - .5
-            Rover.steer = np.clip(a, -15, 15)
+            # Biase 5 deg right to force wall hugging
+            bias = -5.0
+            bias = 0.0
+            Rover.steer = np.clip(Rover.target_angle + bias , -15, 15)
         else:
             Rover.steer = 0
-
-    #old_steer = np.clip(np.mean(Rover.nav_angles * 180/np.pi), -15, 15)
-    #print("STEER!  set to", Rover.steer, "in forward")
-    #print("STEER!  old steer would have been", old_steer)
-
-    if len(Rover.nav_rock_vectors) > 0:
-        a = Rover.nav_rock_angles_mean * 180 / np.pi
-        a /= 2.0
-        Rover.steer = np.clip(a, -15, 15)
-        print("SEE A ROCK, Override steering! set to", Rover.steer)
 
     return Rover
 
@@ -119,26 +107,23 @@ def decision_mode_stop(Rover):
 
         return Rover
 
-    if len(Rover.nav_rock_vectors) > 0:
+    if Rover.see_rock:
         # We see a rock!
-        print("SEE A ROCK IN STOP, angle={:6.3f} distance={:6.3f}".format(Rover.nav_rock_angles_mean*180.0/np.pi, Rover.nav_rock_dists_mean))
+        print("SEE A ROCK IN STOP, angle={:6.3f} distance={:6.3f}".format(Rover.rock_angle, Rover.rock_dist))
         # Spin to face it if needed
-        a = Rover.nav_rock_angles_mean * 180 / np.pi
-        if abs(a) > 5:
-            if Rover.nav_rock_angles_mean > 0:
-                a = 5
-            else:
-                a = -5
-            return decision_set_spin(Rover, a);
-        else:
+        if abs(Rover.rock_angle) < 10:
             # We are pointed towards it sort of, move forward
             return decision_set_forward(Rover)
-
-    # Now we're stopped and we have vision data to see if there's a path forward
+        else:
+            if Rover.rock_angle > 0:
+                a = 5   # Slow spin left
+            else:
+                a = -5  # Slow spin right
+            return decision_set_spin(Rover, a);
 
     if Rover.target_vel < 0.2:
         # No path forward -- spin to look for options
-        if Rover.nav_l_dists_mean > Rover.nav_r_dists_mean:
+        if Rover.target_angle > 0:
             a = 15
         else:
             a = -15
@@ -177,10 +162,8 @@ def decision_mode_spin(Rover):
     if Rover.near_sample:
         return decision_set_stop(Rover);
 
-    if len(Rover.nav_rock_vectors) > 0:
-        # We see a rock!
-        a = Rover.nav_rock_angles_mean * 180 / np.pi
-        if abs(a) <= 10:
+    if Rover.see_rock:
+        if abs(Rover.rock_angle) <= 10:
             # stop spinning and go get it
             return decision_set_stop(Rover);
         # else keep spinning
