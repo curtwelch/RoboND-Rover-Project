@@ -2,6 +2,7 @@ import numpy as np
 import cv2
 import math
 import sys
+import time
 
 # return the mean distances and mean angles for a list of polar (dist, angle) points
 # Needed this function to deal with null lists correclty
@@ -74,7 +75,7 @@ def to_polar_coords(x_pixel, y_pixel):
 # Define a function to apply a rotation to pixel positions
 def rotate_pix(xpix, ypix, yaw):
     # Convert yaw to radians
-    yaw_rad = yaw * np.pi / 180
+    yaw_rad = yaw * np.pi / 180.0
     # Apply a rotation
     xpix_rotated = xpix * np.cos(yaw_rad) - ypix * np.sin(yaw_rad)
     ypix_rotated = xpix * np.sin(yaw_rad) + ypix * np.cos(yaw_rad)
@@ -82,28 +83,64 @@ def rotate_pix(xpix, ypix, yaw):
     return xpix_rotated, ypix_rotated
 
 # Define a function to perform a translation
-def translate_pix(xpix_rot, ypix_rot, xpos, ypos, scale): 
+def translate_pix(xpix_rot, ypix_rot, xpos, ypos, scale, truncate=True): 
     # Apply a scaling and a translation
-    xpix_translated = np.int_(xpix_rot/scale + xpos)
-    ypix_translated = np.int_(ypix_rot/scale + ypos)
+    xpix_translated = xpix_rot/scale + xpos
+    ypix_translated = ypix_rot/scale + ypos
+    if truncate:
+        xpix_translated = np.int_(xpix_translated)
+        ypix_translated = np.int_(ypix_translated)
     # Return the result  
     return xpix_translated, ypix_translated
 
 # Define a function to apply rotation and translation (and clipping)
 # Once you define the two functions above this function should work
-def pix_to_world(xpix, ypix, xpos, ypos, yaw, world_size, scale):
+def pix_to_world(xpix, ypix, xpos, ypos, yaw, world_size, scale, truncate=True):
     # Apply rotation
     xpix_rot, ypix_rot = rotate_pix(xpix, ypix, yaw)
     # Apply translation
-    xpix_tran, ypix_tran = translate_pix(xpix_rot, ypix_rot, xpos, ypos, scale)
+    xpix_tran, ypix_tran = translate_pix(xpix_rot, ypix_rot, xpos, ypos, scale, truncate=truncate)
     # Perform rotation, translation and clipping all at once
-    x_pix_world = np.clip(np.int_(xpix_tran), 0, world_size - 1)
-    y_pix_world = np.clip(np.int_(ypix_tran), 0, world_size - 1)
+    if truncate:
+        x_pix_world = np.clip(np.int_(xpix_tran), 0, world_size - 1)
+        y_pix_world = np.clip(np.int_(ypix_tran), 0, world_size - 1)
+    else:
+        x_pix_world = np.clip(xpix_tran, 0, world_size - 1)
+        y_pix_world = np.clip(ypix_tran, 0, world_size - 1)
     # Return the result
     return x_pix_world, y_pix_world
 
 # Define a function to perform a perspective transform
-def perspect_transform(img, src, dst):
+# Add a fudge for pitch to help accurcy
+# Hard code source and destiation into function
+def perspect_transform(img, Rover):
+           
+    # Map pitch from 0 to 360 to +- 180 keeping zero as zero
+
+    pitch_offset = Rover.pitch
+    if pitch_offset > 180:
+         pitch_offset -= 360
+
+    upshift = pitch_offset * -1.9
+
+    dst_size = 5 
+    # Set a bottom offset to account for the fact that the bottom of the image 
+    # is not the position of the rover but a bit in front of it
+    # this is just a rough guess, feel free to change it!
+    bottom_offset = 6
+    src = np.float32([[14, 140+upshift], [301 ,140+upshift],[200, 96+upshift], [118, 96+upshift]])
+    dst = np.float32([[Rover.img.shape[1]/2 - dst_size, Rover.img.shape[0] - bottom_offset],
+		      [Rover.img.shape[1]/2 + dst_size, Rover.img.shape[0] - bottom_offset],
+		      [Rover.img.shape[1]/2 + dst_size, Rover.img.shape[0] - 2*dst_size - bottom_offset], 
+		      [Rover.img.shape[1]/2 - dst_size, Rover.img.shape[0] - 2*dst_size - bottom_offset],
+		      ])
+
+    M = cv2.getPerspectiveTransform(src, dst)
+    warped = cv2.warpPerspective(img, M, (img.shape[1], img.shape[0]))# keep same size as input image
+    
+    return warped
+
+def perspect_transform_old(img, src, dst): 
            
     M = cv2.getPerspectiveTransform(src, dst)
     warped = cv2.warpPerspective(img, M, (img.shape[1], img.shape[0]))# keep same size as input image
@@ -163,14 +200,15 @@ def perception_step(Rover):
 
 
     # 2) Apply perspective transform
-    warped = perspect_transform(Rover.img, source, destination)
+    warped = perspect_transform(Rover.img, Rover)
 
     sand_rgb_thresh=(198,180,160)
     sand_rgb_thresh=(190,170,160)
 
     rock_rgb_thresh=(150,150,100)
-    rock_rgb_thresh=(80,80,30)
     rock_rgb_thresh=(100,100,60)
+    rock_rgb_thresh=(80,80,30) # tried this but saw one in test data  it couln't see
+    rock_rgb_thresh=(90,90,60) # seemed to be good in test images of rocks
 
     sand = color_thresh(warped, rgb_thresh=sand_rgb_thresh)
     rock = yellow_thresh(warped, rgb_thresh=rock_rgb_thresh)
@@ -187,10 +225,11 @@ def perception_step(Rover):
     # Pixels are 10 units per meter so we trim to a 10x20 pixel area.
     # 0,0 is in front of us.  Y is _- 5 pix, x 20 is two meters in front of us (approx)
 
-    save_zone_width = 15 # pixels (aka 1 meter per 10 pixel)
-    save_zone_depth = 40
+    safe_zone_width = 15 # pixels (aka 1 meter per 10 pixel)
+    safe_zone_depth = 20 + Rover.max_vel * 5
 
-    fxylist  = [xy for xy in zip(sxpix, sypix) if xy[0] <= save_zone_depth and abs(xy[1]) <= save_zone_width/2]
+
+    fxylist  = [xy for xy in zip(sxpix, sypix) if xy[0] <= safe_zone_depth and abs(xy[1]) <= safe_zone_width/2]
     fxpix = [xy[0] for xy in fxylist]
     fypix = [xy[1] for xy in fxylist]
 
@@ -205,7 +244,7 @@ def perception_step(Rover):
     # ROVER VISION DISPLAY
     #
 
-    if 1: # overlay threshold ground on camara image
+    if 1: # overlay threshold ground on camera image
         #Rover.vision_image[:,:,:] = Rover.img[:,:,:]
         Rover.vision_image[:,:,:] = np.zeros_like(Rover.img)
         Rover.vision_image[:,:,0] = sand[:,:] * 255
@@ -213,6 +252,22 @@ def perception_step(Rover):
         Rover.vision_image[:,:,2] = rock[:,:] * 255
         Rover.vision_image[160-np.int32(fxpix),160-np.int32(fypix),2] = 255
         Rover.vision_image[160-np.int32(fxpix),160-np.int32(fypix),0] = 0
+
+        if Rover.saw_rock:
+            # Draw a yellow square where we think the rock is
+            Rover.update_rock()
+            x = 160 - int(Rover.rock_xpix)
+            y = 160 - int(Rover.rock_ypix)
+            # print("ROCK x, y = ", x, y)
+            xmin = np.clip(x-4, 0, 320-1)
+            ymin = np.clip(y-4, 0, 320-1)
+            xmax = np.clip(x+4, 0, 320-1)
+            ymax = np.clip(y+4, 0, 320-1)
+            if Rover.see_rock:
+                Rover.vision_image[xmin:xmax, ymin:ymax, 0:2] = 255 ## Yellow
+            else:
+                Rover.vision_image[xmin:xmax, ymin:ymax, 1:2] = 255 ## Green (estimated location)
+                
 
     if 0: # Show warped image
         Rover.vision_image[:,:,:] = warped[:,:,:]
@@ -244,23 +299,26 @@ def perception_step(Rover):
     #
 
     # Only update if the rover is near flat -- we don't adjust for
-    # pitch and roll distorations.  This keeps the map more accurate.
+    # roll distorations but we do adjust for pitch.  This keeps the map more accurate.
+    # The pitch algoirthm is a quick fudge, not accurately calibrated so we can accept
+    # large pich errors than roll errors.
 
     var = 2         # deg variance for trusting image data since we don't adjust for
                     # pitch or roll
 
-    if (Rover.pitch < var or Rover.pitch > 360.0-var) and \
+    world_size = 200
+    world_scale = 10.0    # 10 warpped pixes per one world map pixel
+
+    if (Rover.pitch < var*4 or Rover.pitch > 360.0-var*4) and \
         (Rover.roll < var or Rover.roll > 360.0-var):
 
-        world_size = 200
-        scale = 10.0    # 10 warpped pixes per one world map pixel
 
         sxpix_world, sypix_world = pix_to_world(sxpixt, sypixt, Rover.pos[0],
-                                              Rover.pos[1], Rover.yaw, world_size, scale)
+                                              Rover.pos[1], Rover.yaw, world_size, world_scale)
         rxpix_world, rypix_world = pix_to_world(rxpix, rypix, Rover.pos[0],
-                                              Rover.pos[1], Rover.yaw, world_size, scale)
+                                              Rover.pos[1], Rover.yaw, world_size, world_scale)
         wxpix_world, wypix_world = pix_to_world(wxpix, wypix, Rover.pos[0],
-                                              Rover.pos[1], Rover.yaw, world_size, scale)
+                                              Rover.pos[1], Rover.yaw, world_size, world_scale)
 
         ## Note after the above mapping, there will be duplicate x,y world pixels due to mapping from
         ## from 10x10 threshold grid to 1x1 world grid
@@ -269,9 +327,9 @@ def perception_step(Rover):
         # Update World map from pixel data
         #
 
-        Rover.worldmap[wypix_world, wxpix_world, 0] = 1
-        Rover.worldmap[rypix_world, rxpix_world, 1] = 1
-        Rover.worldmap[sypix_world, sxpix_world, 2] = 1
+        Rover.worldmap[wypix_world, wxpix_world, 0] += 1
+        Rover.worldmap[rypix_world, rxpix_world, 1] += 1
+        Rover.worldmap[sypix_world, sxpix_world, 2] += 1
 
     #
     # Divide ground pixels into forward set, left set, an right set
@@ -313,20 +371,53 @@ def perception_step(Rover):
 
     #
     # Now the ROCKs!
+    # We both spot rocks, and remember when we last saw it.  The memory
+    # is needed because sometimes we see a rock, but can't stop fast enough.
+    # By the time we stop, the rock is no longer in our vision.  We must try
+    # to spin around in the righ direction to find it, so we need to remember
+    # we saw it.
     #
 
     Rover.see_rock = False
     Rover.rock_pixels = len(rxpix)
-    Rover.rock_angle = 0
-    Rover.rock_dist = 0
 
     if Rover.rock_pixels > 1:  # Must be more than 1 pix to cont as rock
-        # Just take the first pixel as the angle and distance!
-        # This helps if we see more than one rock at the same time
-        # Assumes low odds of false positives
         Rover.see_rock = True
-        Rover.rock_dist, Rover.rock_angle = to_polar_coords(rxpix[0], rypix[0])
-        Rover.rock_angle = Rover.rock_angle * 180.0 / np.pi 
+
+        dists, angles = to_polar_coords(rxpix, rypix)
+
+        # Find the pixel with the minimum distance.  This is the most accurate measure
+        # of the rock, since it will be the bottom pixel touching the ground -- all
+        # ohters will "look" to be further away.  It also solves the issue of two or more rocks
+        # at the same time -- we find the closest!  But if we get false postives, this could
+        # send us to a noise artifiact instead of to the rock!  Doesn't seem to be an issue
+        # in this fake world.
+
+        i = np.argmin(dists)
+
+        Rover.rock_dist = dists[i]
+        Rover.rock_angle = angles[i] * 180 / np.pi
+        Rover.rock_xpix = rxpix[i]
+        Rover.rock_ypix = rypix[i]
+
+        Rover.rock_xpix_world, Rover.rock_ypix_world = pix_to_world(Rover.rock_xpix, Rover.rock_ypix,
+                Rover.pos[0], Rover.pos[1], Rover.yaw, world_size, world_scale, truncate=False)
+
+        dists = None
+        angles = None
+
+        Rover.saw_rock = True
+        Rover.saw_time = time.time() # Record time we last saw a rock!
+
+        # rock_dist and rock_angle stay valid from last time we saw a rock
+        # even if we don't currently see it
+
+    if (not Rover.see_rock) and Rover.saw_rock and Rover.saw_time + 4.0 < time.time():
+        # it's been 2 seconds and we didn't find it, forget we ever saw it.
+        #print("MEMORY OF ROCK FADES, TIME IS", time.time(), " saw it at ", Rover.saw_time)
+        Rover.saw_rock = False
+
+    Rover.update_rock() # only does sommething if we are in rock_saw mode
 
     #
     # Status output to tty
@@ -344,6 +435,11 @@ def perception_step(Rover):
     if Rover.see_rock:
         print(" -----------------------------  ROCK AT {:6.2f} deg, {:6.2f} distx, {} pixels". \
                 format(Rover.rock_angle, Rover.rock_dist, Rover.rock_pixels))
+    elif Rover.saw_rock:
+        print(" ++++++++++++++++++++++++++++++ SAW ROCK BUT IT'S GONE NOW ++++++++++++++++++++++")
+
     print("")
+
+    #print("Rover pos", Rover.pos, " Rocks to find:", Rover.samples_pos)
 
     return Rover

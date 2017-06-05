@@ -19,13 +19,18 @@ def update_rover(Rover, data):
       if Rover.start_time == None:
             Rover.start_time = time.time()
             Rover.total_time = 0
-            samples_xpos = np.int_([convert_to_float(pos.strip()) for pos in data["samples_x"].split(',')]) # cw change to ,
-            samples_ypos = np.int_([convert_to_float(pos.strip()) for pos in data["samples_y"].split(',')]) # cw change to ,
+            #print("Init samples_x is '{}'".format(data["samples_x"]))
+            if data["samples_x"] == "": # no samples -- need to special case
+                samples_xpos = []
+                samples_ypos = []
+            else:
+                samples_xpos = np.int_([convert_to_float(pos.strip()) for pos in data["samples_x"].split(',')]) # cw change to ,
+                samples_ypos = np.int_([convert_to_float(pos.strip()) for pos in data["samples_y"].split(',')]) # cw change to ,
             Rover.samples_pos = (samples_xpos, samples_ypos)
-            #print("Init samples_x is", data["samples_x"]);
             #print("Init sample_xpos is", samples_xpos);
-            #sys.exit(0)
-            Rover.samples_to_find = np.int(data["sample_count"])
+            Rover.samples_to_find = max(np.int(data["sample_count"]), 6)
+            #print("samples to find", Rover.samples_to_find)
+            # Set to 6 if less than 6 -- assume a client restart after finding some already
       # Or just update elapsed time
       else:
             tot_time = time.time() - Rover.start_time

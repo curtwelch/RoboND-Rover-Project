@@ -1,4 +1,4 @@
-# Do the necessary imports
+#Do the necessary imports
 import argparse
 import shutil
 import base64
@@ -16,6 +16,7 @@ import json
 import pickle
 import matplotlib.image as mpimg
 import time
+import sys
 
 # Import functions for perception and decision making
 from perception import perception_step
@@ -57,6 +58,8 @@ class RoverState():
         self.mode = 'forward' # Current mode (can be forward or stop)
         #self.throttle_set = 0.2 # Throttle setting when accelerating
         self.throttle_set = 0.5 # Throttle setting when accelerating
+        self.throttle_set = 1.0 # Throttle setting when accelerating
+        self.throttle_target = 0.0
         self.brake_set = 10 # Brake setting when braking
         # The stop_forward and go_forward fields below represent total count
         # of navigable terrain pixels.  This is a very crude form of knowing
@@ -65,8 +68,8 @@ class RoverState():
         self.stop_forward = 50 # Threshold to initiate stopping
         self.go_forward = 500 # Threshold to go forward again
         self.min_vel = 0.1 # Minimum forward driving velocity (meters/second)
-        # self.max_vel = 2 # Maximum velocity (meters/second)
-        self.max_vel = 3 # Maximum velocity (meters/second)
+        self.max_vel = 5 # Maximum velocity (meters/second)
+        self.max_vel = 4 # Maximum velocity (meters/second)
         self.target_vel = 0 # max safe forward velocity calcuated from vectors
         # Image output from perception step
         # Update this image to display your intermediate analysis steps
@@ -82,6 +85,46 @@ class RoverState():
         self.near_sample = 0 # Will be set to telemetry value data["near_sample"]
         self.picking_up = 0 # Will be set to telemetry value data["picking_up"]
         self.send_pickup = False # Set to True to trigger rock pickup
+
+        # Rock grabing varibales
+        self.see_rock = False
+        self.rock_pixels = 0
+        self.rock_angle = 0
+        self.rock_dist = 0
+        self.saw_rock = False
+        self.saw_time = time.time()
+        self.rock_xpix = 0 # Rover centric coords
+        self.rock_ypix = 0
+        self.rock_xpix_world = 0
+        self.rock_ypix_world = 0
+
+    def update_rock(self):
+        # If we are in "saw_rock" mode, update the rock angle and dist
+        # from the saved world xpix and ypix given the current rover position
+        # and yaw.
+        # Also upate xpic and ypic
+        # rock_dist is in relative pixels 10 per m
+        # rock_angle is degrees +- 10
+        # Rover.yaw is degrees 0 to 360
+
+        if self.saw_rock and not self.see_rock:
+           self.rock_dist = np.sqrt((self.pos[0] - self.rock_xpix_world)**2 +
+                                (self.pos[1] - self.rock_ypix_world)**2) * 10.0 
+           self.rock_angle = np.arctan2(self.rock_ypix_world - self.pos[1],
+                                          self.rock_xpix_world - self.pos[0])
+           self.rock_angle *= 180.0 / np.pi # rad to degrees
+           # yaw is 0 to 360
+           # we need rock_angle to be +- 180
+           self.rock_angle = self.rock_angle - self.yaw
+           if self.rock_angle > 180.0:
+                self.rock_angle -= 360.0
+           if self.rock_angle < -180.0:
+                self.rock_angle += 360.0
+           self.rock_ypix = self.rock_dist * np.sin(self.rock_angle * np.pi / 180)
+           self.rock_xpix = self.rock_dist * np.cos(self.rock_angle * np.pi / 180)
+
+        return
+
 # Initialize our rover 
 Rover = RoverState()
 
