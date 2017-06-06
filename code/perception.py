@@ -327,15 +327,10 @@ def perception_step(Rover):
         # Update World map from pixel data
         #
 
-        Rover.worldmap[wypix_world, wxpix_world, 0] += 1
-        Rover.worldmap[rypix_world, rxpix_world, 1] += 1
-        Rover.worldmap[sypix_world, sxpix_world, 2] += 1
+        Rover.worldmap[wypix_world, wxpix_world, 0] = 1
+        Rover.worldmap[rypix_world, rxpix_world, 1] = 1
+        Rover.worldmap[sypix_world, sxpix_world, 2] = 1
 
-    #
-    # Divide ground pixels into forward set, left set, an right set
-    # Useful, and kmportant, but kills CPU
-    #
-    
     Rover.nav_dists, Rover.nav_angles = to_polar_coords(sxpix, sypix) # (dists, angles)
 
     # Distance is in pixels not meters (10 pixels per meter)
@@ -362,12 +357,12 @@ def perception_step(Rover):
 
     v = (max_vel * (safe_pixel_cnt - zero_pixel_cnt_point)) / (MaxSafePixelCnt - zero_pixel_cnt_point)
 
-    Rover.target_vel = np.clip(v, 0.0, max_vel)
+    Rover.safe_vel = np.clip(v, 0.0, max_vel)
 
     if len(Rover.nav_angles) == 0:
-        Rover.target_angle = 0.0
+        Rover.safe_angle = 0.0
     else:
-        Rover.target_angle = np.mean(Rover.nav_angles) * 180.0 / np.pi
+        Rover.safe_angle = np.mean(Rover.nav_angles) * 180.0 / np.pi
 
     #
     # Now the ROCKs!
@@ -430,7 +425,7 @@ def perception_step(Rover):
         print("")
         print("FPS {:3d} ".format(Rover.fps), end='')
 
-    print("Target V:{:6.3f}  A:{:6.3f}".format(Rover.target_vel, Rover.target_angle), end='')
+    print("Target SV:{:6.3f} SA:{:6.3f}".format(Rover.safe_vel, Rover.safe_angle), end='')
 
     if Rover.see_rock:
         print(" -----------------------------  ROCK AT {:6.2f} deg, {:6.2f} distx, {} pixels". \

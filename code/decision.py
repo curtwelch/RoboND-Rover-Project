@@ -1,244 +1,412 @@
 import numpy as np
 import math
+import random
+import sys
+import time
 
-def decision_set_stop(Rover):
-    print("SET MODE STOP")
-    # Set mode to "stop" and hit the brakes!
-    Rover.mode = 'stop'
-    Rover.throttle = 0
-    Rover.throttle_target = 0
-    # Set brake to stored brake value
-    Rover.brake = Rover.brake_set
-    Rover.steer = 0
+def decision_set_stuck(Rover, forward=False):
+    # Oh crap -- try something random for a random bit of time
+
+    Rover.mode = 'stuck'
+
+    Rover.stuck_cnt = 0
+    Rover.stuck_end = 10 + random.random() * 100
+
+    Rover.brake = 0.0
+    Rover.throttle = 0.0
+    Rover.steer = 0.0
+
+    # We set throttle_current to desired throttle and
+    # and target_angle to desired steer and reset it on each call
+    # just in case server overwrites them.
+
+    if forward:
+        # Special request to try and just drive forward (from spin)
+        # Try just drivig forward for a while using current setting
+        Rover.throttle_current = 1.0
+        Rover.target_angle = 0.0
+    elif random.random() > .5: # Try spinning
+        Rover.throttle_current = 0
+        if random.random() > .5:
+            Rover.target_angle = -15.0
+        else:
+            Rover.target_angle = 15.0
+    else:
+        # Try driving
+        max = 50 # blow it out of the water
+        #Rover.throttle_current = np.clip(random.random() * Rover.throttle_max, 1.0, Rover.throttle_max)
+        Rover.throttle_current = np.clip(random.random() * max, 1.0, max)
+        if random.random() > 0.5:
+            Rover.throttle_current = -Rover.throttle_current # Try reverse
+        Rover.target_angle = np.clip(random.random() * 30 - 15, -15, 15)
+        print("STUCK THROTTLE IS", Rover.throttle_current)
+
+    Rover.brake = 0.0
+    Rover.throttle = Rover.throttle_current
+    Rover.steer = Rover.target_angle
+
+    return Rover
+
+def decision_mode_stuck(Rover):
+
+    Rover.brake = 0.0
+    Rover.throttle = Rover.throttle_current
+    Rover.steer = Rover.target_angle
+
+    Rover.stuck_cnt += 1
+
+    if Rover.stuck_cnt > Rover.stuck_end:
+        return decision_set_stop(Rover)
+        
+    # Else keep on spinning the wheels
+
+    # Might need a better apporach to understanding if we are unstuck.
+    # Path forward doesn't work, beause we could have a wheel stuck on a rock
+    # and the camara still looks good.
+    # Maybe a distance moved test would be good -- if we are moving, that would
+    # tell us we got unstuck sort of.  The fear is that we are really still
+    # suck, but it will take the other code a long time to figure that
+    # out and come back here.
+
     return Rover
 
 def decision_set_forward(Rover):
-    print("SET MODE FORWARD")
     # Just change to forward mode, we will decided what to
     # on next image frame
     Rover.mode = 'forward'
-    # The rest will be set later
-    Rover.throttle = 0
-    Rover.steer = 0
-    Rover.brake = 0
+    Rover.forward_stuck_cnt = 0
     return Rover
 
 def decision_mode_forward(Rover):
-    # print("MODE decision_mode_forward()")
-    # Rover.mode is 'forward': 
-
-    # Regulate speed to Rover.target_vel
 
     if Rover.near_sample:
         # stop and grab rock!!
         return decision_set_stop(Rover)
 
     if Rover.saw_rock:
-        # We saw or still see a rock, but aren't close enough
+        # We saw or still see a rock, but aren't close enough to grab it.
         # Are we headed towareds it?  If so, keep going
         # if not, stop, and spin to turn towards it
-        # We see a rock!!!  Stop and spin to point towards it
-        Rover.target_vel = 0.5
+        Rover.target_vel = 1.0 # Slow speed rock hunting
         if abs(Rover.rock_angle) > 40: # Stop and spin
             #print("SEE A ROCK STOP AND SPIN")
             return decision_set_stop(Rover)
         # Otherwise, keep going forward and turn
         # Try to go forward even if there's no path forward
-    elif Rover.target_vel < 0.2:
-        # this means no path forward, stop and do something else
+        Rover.target_angle = Rover.rock_angle
+        return Rover
+
+    # Move forward at the perception recommended speed and direction
+
+    Rover.target_vel = Rover.safe_vel
+    Rover.target_angle = Rover.safe_angle
+
+    if Rover.target_vel == 0.0:
+        # means no path forward, set stop mode.
+        # Let stop figure out what to do
         return decision_set_stop(Rover)
 
-    if Rover.vel < Rover.target_vel:
-        # Throttle UP
-        Rover.throttle_target = Rover.throttle_set
-        Rover.brake = 0
-    elif Rover.vel > Rover.target_vel*1.5:
-        # Throttle off, break
-        Rover.throttle = 0
-        Rover.throttle_target = 0.0
-        Rover.brake = Rover.brake_set / 2.0 # light brake
-    else: # coast
-        Rover.throttle_target  = 0
-        Rover.brake = 0
-
-    # slowly increase and decrease throttle
-    if Rover.throttle < Rover.throttle_target:
-        Rover.throttle += 0.05
-    if Rover.throttle > Rover.throttle_target:
-        Rover.throttle -= 0.05
-
-    # Set steering
-    # Use follow the right wall logic to expore the environment
-    # Use the anverage angle for the right and forward vectors to set
-    # angle.
-    
-    if Rover.saw_rock:
-        Rover.steer = np.clip(Rover.rock_angle/2, -15, 15)
-        # print("SAW A ROCK, steer to", Rover.steer)
+    if Rover.vel > Rover.target_vel or Rover.vel > 0.2:
+        Rover.forward_stuck_cnt = 0     # not stuck
     else:
-        # Set steering to average angle clipped to the range +/- 15
-        if len(Rover.nav_angles) > 0:
-            # Biase 5 deg right to force wall hugging
-            bias = -5.0
-            bias = 0.0
-            a = Rover.target_angle + bias
-            a = a/2.0
-            Rover.steer = np.clip(a, -15, 15)
+        Rover.forward_stuck_cnt += 1    # Might be stuck
+
+    if Rover.forward_stuck_cnt > 100:
+        return decision_set_stuck(Rover)
+
+    return Rover
+
+def drive_rover(Rover):
+    # Control the throttle and brake to regulate Rover.vel to Rover.target_vel
+    # Steer towards Rover.target_angle
+    # Basically a type of PID-like cotroller to create smoother driving behavior.
+
+    # (does negative throttle work to brake?  Haven't tried it)
+    # Yes it edoes. And oh crap, -50 or +50 throttle works! Don't know
+    # where it's capped. But the rover loses control and spins out at this
+    # high numbers.  Speed seems capped at 5 anyway.
+    # 10000 works, but it comes back as 1,000.00 which breaks the decoding
+    # code that trys to change , to . and float conversion blows up.  I'll just
+    # ignore that bug since I have no needs for huge throttle seetings.
+    # This code does not support backing up with negative target_vel.
+    # But it could.  Should.
+
+    # Warning Rover.vel can go negative when stopping and rocking
+
+    # throttle_tarrget is set to one of -brake_max, 0, or throttle_max.
+    # So it's either full speed ahead, or full speed stop.  But them
+    # we only slowly adjust throttle/brake as needed to move towareds
+    # that target.  The target jumps up and down so then the actual setting
+    # stays somewhat stable.
+    # Maybe it wouod be better to just code a true PID here???
+
+    if Rover.mode == 'stuck':
+        # we reset thsese for stuck mode to keep them from being reset
+        Rover.brake = 0
+        Rover.throttle = Rover.throttle_current
+        Rover.steer = np.clip(Rover.target_angle, -15, 15)
+        return Rover
+
+    speed = 0.02
+
+    if Rover.mode == 'spin':
+        Rover.throttle_target = 0.0
+        Rover.throttle_current = 0.0
+    elif Rover.target_vel > 0.0:
+        # optimize forward speed but no fear of sudden stop needed
+        if Rover.vel < Rover.target_vel:
+            # Throttle UP
+            Rover.throttle_target = Rover.throttle_max
         else:
-            Rover.steer = 0
+            Rover.throttle_target = -1.0  # (light braking possible)
+        if Rover.throttle_current < -1.0:
+            # Someone left the brake on.
+            Rover.throttle_current = 0
+    else:
+        # Assume target velocity is zero.  If fact, we just force it since
+        # we don't support negative values
+        # Does this mean hard stop?  Fast?
+        Rover.target_vel = 0.0
+        # Well, hell, if we are moving, just slam on the brakes
+        # Ok, if we want to slow to a stop, set target_vel to something small, not zero...
+        if abs(Rover.vel) > 0.0:
+            Rover.throttle_target = -Rover.brake_max
+        else:
+            # Else we can take the brake off
+            # Hopefully we won't roll anywhere in this environment
+            Rover.throttle_target = 0
+        Rover.throttle_current = Rover.throttle_target # Make it so!
+
+    # Move throttle_current towards throttle_target slowly according to speed
+
+    Rover.throttle_current += (Rover.throttle_target - Rover.throttle_current) * speed
+
+    if Rover.throttle_current == 0:
+        Rover.throttle = 0.0
+        Rover.brake = 0.0
+    elif Rover.throttle_current >= 0:
+        Rover.throttle = Rover.throttle_current
+        Rover.brake = 0
+    else: # < 0 so brake
+        Rover.throttle = 0
+        Rover.brake = -Rover.throttle_current
+
+    #
+    # Now set steering
+    #
+
+    # target_angle is where we want to go -- but we set steering
+    # to half that and turns torwards in -- reduces osscilations.
+    # When spinning, steer ends up controlling spin speed. (throttle is zero)
+
+    if Rover.mode == 'spin':
+        Rover.steer = np.clip(Rover.target_angle, -15, 15)
+    else:
+        # driving -- set to half of the angle
+        Rover.steer = np.clip(Rover.target_angle/2.0, -15, 15)
+
+    return Rover
+
+def decision_set_stop(Rover):
+    print("SET MODE STOP")
+    # Set mode to "stop" and set target speed to zero.
+    # Will stop quickly and smoothly, but not the same as
+    # slaming on brakes!
+    # We stop so we can pick up a rock or spin to find a new direction
+
+    Rover.mode = 'stop'
+    Rover.target_vel = 0
+
+    # Warning, rover starts up in Stop mode, but this setup routing
+    # is never called.  Make sure mode_stop code works ok without thi
+    # init.
 
     return Rover
 
 def decision_mode_stop(Rover):
+
     # print("MODE decision_mode_stop()")
-    # If we're in stop mode but still moving keep braking
+    # If we are still moving just wait for us to stop
+
     if abs(Rover.vel) > 0.2:
-        Rover.throttle = 0
-        Rover.throttle_target = 0
-        Rover.brake = Rover.brake_set
-        Rover.steer = 0
-        #print("STEER!  set to zero in stop mode")
+        # Wait for rover to stop.
+        # Could be an issue if it's rocking on top of a rock or something.
+        # May never stop.  Or .2 may be too high to start a spin?
         return Rover
 
-    # else we're not moving (vel < 0.2) then do something else
-    
     # Is there a rock to pick up?  Do it!
 
-    if Rover.near_sample:
+    if Rover.near_sample or Rover.picking_up:
         # Keep asking until the simulator tells us it's picking up!
         # It might not pick up if we are still moving?  Ignore that
         # an keep asking.
+
         if not Rover.picking_up:
             Rover.send_pickup = True
             return Rover
 
-        # Othherwise, it's picking up, so just do nothing an just
-        # wait for it to get done.
+        # Otherwise, it's picking up, so just wait.
 
         return Rover
 
-    if Rover.see_rock and abs(Rover.rock_angle) < 10:
-        # We are pointed towards it sort of, move forward
-        # print("SEE A ROCK IN STOP, angle={:6.3f} distance={:6.3f}".format(Rover.rock_angle, Rover.rock_dist))
-        return decision_set_forward(Rover)
-
     if Rover.saw_rock:
-        # We saw, or maybe still see, a rock!
-        # Spin to try and find it
+        if abs(Rover.rock_angle) < 10:
+            # We are pointed towards it sort of, move forward
+            # print("SEE A ROCK IN STOP, angle={:6.3f} distance={:6.3f}".format(Rover.rock_angle, Rover.rock_dist))
+            return decision_set_forward(Rover)
+
+        # else Spin to try to point at it
         if Rover.rock_angle > 0:
             a = 5   # Slow spin left
         else:
             a = -5  # Slow spin right
         return decision_set_spin(Rover, a);
 
-    if Rover.target_vel < 0.2:
-        # No path forward -- spin to look for options
-        if Rover.target_angle > 0:
-            a = 15
+    good_go_velocity = 0.2
+
+    if Rover.safe_vel < good_go_velocity:
+        # No _good_ path forward -- spin to look for options
+        if abs(Rover.target_angle) > 10:
+        # Strong opinion, spin towards the better path
+            if Rover.target_angle > 0:
+                a = 15
+            else:
+                a = -15
         else:
-            a = -15
+            # Weak opinion, pick ranomly to explore 
+            if random.random() > 0.5:
+                a = 15
+            else:
+                a = -15
         return decision_set_spin(Rover, a)
 
-    # If we see ssufficient navigable terrain in front then go!
+    # forward path is better than 0.2 vel, so lets just try driving again
 
-    if Rover.target_vel >= 0.2:
-        return decision_set_forward(Rover)
-
-    return Rover
+    return decision_set_forward(Rover)
 
 def decision_set_spin(Rover, spin_angle):
-    print("Set SPIN to", spin_angle)
     # - is clockwise to the right, + is counterclockwise to the left
+    # In theory, we are already stopped when we try to start a spin
+    # But the rover doesn't seem to want to spin if it's moving and I don't
+    # Know what happens if it's moving and we set a high steering angle. Will
+    # it slow to a stop, then auto fall into spin mode???  Or will it not start
+    # a spin ever?  I could spend a few hours testing, but insted, I'll just guess.
+
     Rover.mode = 'spin'
-    Rover.throttle = 0
-    Rover.throttle_target = 0
-    # Release the brake to allow turning
-    Rover.brake = 0
-    # Turn range is +/- 15 degrees, when stopped the next line will induce 4-wheel turning
-    Rover.spin_angle = spin_angle
-    Rover.steer = Rover.spin_angle
+    Rover.target_vel = 0.0 # output control will stop and release brake in theory
+
+    # When stopped, setting steer will will induce 4-wheel turning
+    Rover.target_angle = spin_angle ## aka spin speed and direction
+
+    # Escape checking
+    Rover.spin_best_safe_vel = 0.0
+    Rover.spin_best_angles = 0.0
+    Rover.spin_cnt = 0
+
     return Rover
 
 # We are spinning looking for a better path
 def decision_mode_spin(Rover):
     # print("MODE decision_mode_spin()")
 
-    # Needs to be reset eaach time because it's updated from
-    # server and can get reset to zero
-
-    Rover.steer = Rover.spin_angle
-    Rover.throttle = 0 # it gets reset at times by server also
-    Rover.throttle_target = 0
+    # Spinning is controlled by the drive_rover() function
+    # But here is where decided when to stop and what to do next.
 
     if Rover.near_sample:
+        # Stop and pick up rock
         return decision_set_stop(Rover);
 
     if Rover.saw_rock:
         if abs(Rover.rock_angle) <= 10:
             # stop spinning and go get it
             return decision_set_stop(Rover);
-        # else keep spinning
-        if Rover.rock_angle < 0 and Rover.spin_angle > 0 or \
-                Rover.rock_angle > 0 and Rover.spin_angle < 0:
-                # we are spinning the wrong way, stop and reverse
-                # The rock may vanish when we stop, but the stop
-                # code will spin towards it if it still sees it
-                # or else, spin to escape.  There is a danger
-                # of a loop here but I think this is sort of safe.
+
+        # Are we spinning the right way?  We might have just
+        # seen the rock as we were spinning and then passed it.
+        # Or it might have shown up for a moment on th right, when
+        # we are spinnign left, etc.  So stop and turn back towards
+        # it now that we have "rock memory" to remember where we saw it.
+        if Rover.rock_angle < 0 and Rover.target_angle > 0 or \
+                Rover.rock_angle > 0 and Rover.target_angle < 0:
+            # We are spinning the wrong way, stop and reverse direction.
+            # The stop code will make us spin the right way.
+            # We could just reverse direction but looping through
+            # the stop code allows for more advanced behavior in theory.
             return decision_set_stop(Rover);
-    elif Rover.target_vel > 1.0:
-        # If there is no rock, stop spinning and move forward
-        # if the way forward is clear enough to allow 1.0 velocity
+    elif Rover.safe_vel > 1.0:
+        # Good sold path forward -- take it.  Stop spinning and drive.
         return decision_set_stop(Rover);
 
+    # Escape code!
+
+    # Track the quality of optional escape paths forward as we spin.
+
+    Rover.spin_best_safe_vel = max(Rover.spin_best_safe_vel, Rover.safe_vel)
+    Rover.spin_best_angles = max(Rover.spin_best_angles, len(Rover.nav_angles))
+    Rover.spin_cnt += 1
+    
+    print("Spin cnt is", Rover.spin_cnt)
+    print("best safe vel", Rover.spin_best_safe_vel, " best angles", Rover.spin_best_angles)
+
+    if Rover.spin_cnt > 200:
+       # We have to escape this spinning, I'm getting sick
+       if Rover.spin_best_angles > 0: # we have seen something worth trying
+           five_percent = Rover.spin_best_angles * 0.05
+           if len(Rover.nav_angles) > Rover.spin_best_angles - five_percent:
+               # Close enough, lets boogie
+               # Have to force an exit attempt using special stuck mode
+               return decision_set_stuck(Rover, forward=True)
+       else:
+           # crap, no possible paths forward seen at all, we are stuck
+           return decision_set_stuck(Rover)
+
+    if Rover.spin_cnt > 400:
+        # Oh my, we really are stuck, just bale
+        return decision_set_stuck(Rover)
+   
     return Rover
 
-# This is where you can build a decision tree for determining throttle, brake and steer 
-# commands based on the output of the perception_step() function
+#
+# All the decision logic to drive the rover starts here
+#
 
 def decision_step(Rover):
     start_mode = Rover.mode
 
-    r = decision_step2(Rover)
+    r = decision_work(Rover)    # Decide what to do
+    r = drive_rover(r)          # do it
 
     print("         MODE {:7s}  ".format(start_mode), end='')
     print(" t:{:4.1f}   b:{:4.1f}   s:{:6.2f}".format(Rover.throttle, Rover.brake, Rover.steer), end='')
-    print("   Rover vel: {:5.2f}".format(Rover.vel), end='')
-    print("   Throttle target: {:5.2f}".format(Rover.throttle_target), end='')
+    print("   tv: {:5.2f}  real vel: {:5.2f}".format(Rover.target_vel, Rover.vel), end='')
 
-    if Rover.mode != start_mode:
+    if Rover.mode != start_mode: # we decided to change modes
         print(" -> ", Rover.mode, end='')
 
     print()
 
     return r
 
-def decision_step2(Rover):
+def decision_work(Rover):
 
-    # Check if we have vision data to make decisions with
-    if Rover.nav_angles is not None:
-        Rover.update_rock() ## -- will update if needed
+    Rover.update_rock() ## -- will update rock position if needed
 
-        if Rover.mode == 'forward': 
-            return decision_mode_forward(Rover)
+    if Rover.mode == 'forward': 
+        return decision_mode_forward(Rover)
 
-        if Rover.mode == 'stop':
-            return decision_mode_stop(Rover)
+    if Rover.mode == 'stop':
+        return decision_mode_stop(Rover)
 
-        if Rover.mode == 'spin':
-            return decision_mode_spin(Rover)
+    if Rover.mode == 'spin':
+        return decision_mode_spin(Rover)
 
-        # No mode set?
-        # Shoudn't happen, but just in case it doess..
+    if Rover.mode == 'stuck':
+        return decision_mode_stuck(Rover)
 
-        return decision_set_stop(Rover);
+    # No mode set?
+    # Shoudn't happen, but just in case it doess..
 
-    # Just to make the rover do something 
-    # even if no modifications have been made to the code
-
-    Rover.throttle = Rover.throttle_set
-    Rover.steer = 0
-    Rover.brake = 0
+    return decision_set_stop(Rover);
 
     return Rover
 

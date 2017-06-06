@@ -24,8 +24,8 @@ def update_rover(Rover, data):
                 samples_xpos = []
                 samples_ypos = []
             else:
-                samples_xpos = np.int_([convert_to_float(pos.strip()) for pos in data["samples_x"].split(',')]) # cw change to ,
-                samples_ypos = np.int_([convert_to_float(pos.strip()) for pos in data["samples_y"].split(',')]) # cw change to ,
+                samples_xpos = np.int_([convert_to_float(pos.strip()) for pos in data["samples_x"].split(';')]) # cw change to ,
+                samples_ypos = np.int_([convert_to_float(pos.strip()) for pos in data["samples_y"].split(';')]) # cw change to ,
             Rover.samples_pos = (samples_xpos, samples_ypos)
             #print("Init sample_xpos is", samples_xpos);
             Rover.samples_to_find = max(np.int(data["sample_count"]), 6)
@@ -42,7 +42,7 @@ def update_rover(Rover, data):
       Rover.vel = convert_to_float(data["speed"])
       # The current position of the rover
       # CW had to change ; to , to make this work in my system...
-      Rover.pos = [convert_to_float(pos.strip()) for pos in data["position"].split(',')]
+      Rover.pos = [convert_to_float(pos.strip()) for pos in data["position"].split(';')]
       # The current yaw angle of the rover
       Rover.yaw = convert_to_float(data["yaw"])
       # The current yaw angle of the rover

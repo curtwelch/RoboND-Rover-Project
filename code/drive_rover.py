@@ -51,44 +51,31 @@ class RoverState():
         self.steer = 0 # Current steering angle
         self.throttle = 0 # Current throttle value
         self.brake = 0 # Current brake value
-        self.nav_vecgtors = None # list of vectors -- borken into angles and dists below
-        self.nav_angles = None # Angles of navigable terrain pixels
-        self.nav_dists = None # Distances of navigable terrain pixels
-        self.ground_truth = ground_truth_3d # Ground truth worldmap
-        self.mode = 'forward' # Current mode (can be forward or stop)
-        #self.throttle_set = 0.2 # Throttle setting when accelerating
-        self.throttle_set = 0.5 # Throttle setting when accelerating
-        self.throttle_set = 1.0 # Throttle setting when accelerating
-        self.throttle_target = 0.0
-        self.brake_set = 10 # Brake setting when braking
-        # The stop_forward and go_forward fields below represent total count
-        # of navigable terrain pixels.  This is a very crude form of knowing
-        # when you can keep going and when you should stop.  Feel free to
-        # get creative in adding new fields or modifying these!
-        self.stop_forward = 50 # Threshold to initiate stopping
-        self.go_forward = 500 # Threshold to go forward again
-        self.min_vel = 0.1 # Minimum forward driving velocity (meters/second)
-        self.max_vel = 5 # Maximum velocity (meters/second)
-        self.max_vel = 4 # Maximum velocity (meters/second)
-        self.target_vel = 0 # max safe forward velocity calcuated from vectors
-        # Image output from perception step
-        # Update this image to display your intermediate analysis steps
-        # on screen in autonomous mode
-        self.vision_image = np.zeros((160, 320, 3), dtype=np.float) 
-        # Worldmap
-        # Update this image with the positions of navigable terrain
-        # obstacles and rock samples
-        self.worldmap = np.zeros((200, 200, 3), dtype=np.float) 
-        self.samples_pos = None # To store the actual sample positions
-        self.samples_to_find = 0 # To store the initial count of samples
-        self.samples_found = 0 # To count the number of samples found
-        self.near_sample = 0 # Will be set to telemetry value data["near_sample"]
         self.picking_up = 0 # Will be set to telemetry value data["picking_up"]
         self.send_pickup = False # Set to True to trigger rock pickup
 
-        # Rock grabing varibales
+        self.ground_truth = ground_truth_3d # Ground truth worldmap
+
+        #
+        # Percpetion
+        #
+        
+        self.nav_vecgtors = None # list of vectors -- borken into angles and dists below
+        self.nav_angles = None # Angles of navigable terrain pixels
+        self.nav_dists = None # Distances of navigable terrain pixels
+
+        # Perception recomendations for vel and angle (output to decision code)
+        # Must have max_vel less than the max of the simulator so
+        # the over can go over the max and we learn to throttle back.
+        # Simulator max is 5.0, so we set our target speed to 4.5
+        self.max_vel = 4.5 # Maximum velocity (meters/second) that perception will recommend
+        self.safe_vel = 0 # calculcated safe driving speed (0 when no path forward)
+        self.safe_angle = 0 # percpetion 
+        self.estop = 0 # Emergency full speed stop
+
+        # Rock tracking variables
         self.see_rock = False
-        self.rock_pixels = 0
+        self.rock_pixels = 0 # Number of "rock" pixels seen in image
         self.rock_angle = 0
         self.rock_dist = 0
         self.saw_rock = False
@@ -98,11 +85,53 @@ class RoverState():
         self.rock_xpix_world = 0
         self.rock_ypix_world = 0
 
+        #
+        # Decision control
+        #
+
+        self.mode = 'stop' # Current mode (can be forward or stop or spin or stuck)
+
+        self.spin_best_safe_vel = 0.0
+        self.spin_cnt = 0
+
+        self.stuck_cnt = 0
+        self.stuck_end = 0
+
+        self.throttle_max = 1.0 # max throttle setting
+        self.brake_max = 10 # max brake setting when braking
+
+        # speed and angle that control motion and steering
+        self.target_vel = 0 # target speed for rover
+        self.target_angle = 0 # target steering angle
+
+        self.throttle_target = 0.0 # Negative means break
+        self.throttle_current = 0.0 # (what we last set break/throttle to)
+
+        # throttle_current is like acceleration.  Postive means we set the throttle
+        # to this value, and the break is off.  Negative means throttle is off, and
+        # brake is on.  0 means throttle and break is off. (both zero)
+
+
+        # Image output from perception step
+        # Update this image to display your intermediate analysis steps
+        # on screen in autonomous mode
+        self.vision_image = np.zeros((160, 320, 3), dtype=np.float) 
+
+        # Worldmap
+        # Update this image with the positions of navigable terrain
+        # obstacles and rock samples
+        self.worldmap = np.zeros((200, 200, 3), dtype=np.float) 
+        self.samples_pos = None # To store the actual sample positions
+        self.samples_to_find = 0 # To store the initial count of samples
+        self.samples_found = 0 # To count the number of samples found
+        self.near_sample = 0 # Will be set to telemetry value data["near_sample"]
+
     def update_rock(self):
+        # Update memory of the rock we saw but no longer see.
         # If we are in "saw_rock" mode, update the rock angle and dist
         # from the saved world xpix and ypix given the current rover position
-        # and yaw.
-        # Also upate xpic and ypic
+        # and yaw. (rock_xpix_world and rock ypix_world)
+        # Also upate xpic and ypic (rover relative location of rock memory)
         # rock_dist is in relative pixels 10 per m
         # rock_angle is degrees +- 10
         # Rover.yaw is degrees 0 to 360
@@ -217,7 +246,7 @@ def send_control(commands, image_string1, image_string2):
     eventlet.sleep(0)
 # Define a function to send the "pickup" command 
 def send_pickup():
-    print("Picking up")
+    # print("Picking up")
     pickup = {}
     sio.emit(
         "pickup",
