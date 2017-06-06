@@ -36,7 +36,7 @@ def decision_set_stuck(Rover, forward=False):
         max = 50 # blow it out of the water
         #Rover.throttle_current = np.clip(random.random() * Rover.throttle_max, 1.0, Rover.throttle_max)
         Rover.throttle_current = np.clip(random.random() * max, 1.0, max)
-        if random.random() > 0.5:
+        if random.random() > 0.80: # 80% odds of trying reverse
             Rover.throttle_current = -Rover.throttle_current # Try reverse
         Rover.target_angle = np.clip(random.random() * 30 - 15, -15, 15)
 
@@ -229,7 +229,7 @@ def decision_mode_stop(Rover):
     # print("MODE decision_mode_stop()")
     # If we are still moving just wait for us to stop
 
-    if abs(Rover.vel) > 0.2:
+    if abs(Rover.vel) > 0.1:
         # Wait for rover to stop.
         # Could be an issue if it's rocking on top of a rock or something.
         # May never stop.  Or .2 may be too high to start a spin?
@@ -244,12 +244,20 @@ def decision_mode_stop(Rover):
 
         if not Rover.picking_up:
             Rover.send_pickup = True
+            Rover.rock_forget_time = time.time() # time to forget we ever saw it
             return Rover
 
         # Otherwise, it's picking up, so just wait.
 
+        Rover.picked_up = True
+
         return Rover
 
+    if Rover.picked_up:
+        # All this just to not double count
+        Rover.picked_up = False
+        Rover.rock_cnt += 1
+    
     if Rover.saw_rock:
         if abs(Rover.rock_angle) < 10:
             # We are pointed towards it sort of, move forward

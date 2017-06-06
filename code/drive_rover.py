@@ -77,6 +77,7 @@ class RoverState():
         self.rock_angle = 0
         self.rock_dist = 0
         self.saw_rock = False
+        self.invisible_rock = False
         self.saw_time = time.time()
         self.rock_xpix = 0 # Rover centric coords
         self.rock_ypix = 0
@@ -111,6 +112,9 @@ class RoverState():
         # to this value, and the break is off.  Negative means throttle is off, and
         # brake is on.  0 means throttle and break is off. (both zero)
 
+        self.picked_up = False          # State to help count rocks
+        self.rock_cnt = 0               # Number picked up this run
+        self.fakesmell = False          # For Testing invisa-rock code
 
         # Image output from perception step
         # Update this image to display your intermediate analysis steps
@@ -207,6 +211,8 @@ def telemetry(sid, data):
 
             # Send zeros for throttle, brake and steer and empty images
             send_control((0, 0, 0), '', '')
+            # could this be a problem??? CW
+            print("SEND ZEROS DUE TO INVALID Rover.vel")
 
         # If you want to save camera images from autonomous driving specify a path
         # Example: $ python drive_rover.py image_folder_path

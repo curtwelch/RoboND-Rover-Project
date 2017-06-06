@@ -149,8 +149,8 @@ def perspect_transform_old(img, src, dst):
 
 # Skip frames to solve CPU problems...
 
-Skip_ratio = 2.0/3.0 ## Skip 2 out of 3
 Skip_ratio = 1.0/2.0 ## Skip 2 out of 3
+Skip_ratio = 2.0/3.0 ## Skip 2 out of 3
 Skip_cnt = 0.0
 FramesSkipped = 0.0
 FramesTotal = 0.0
@@ -217,23 +217,9 @@ def perception_step(Rover):
 
     wall = (1 - sand[:,:]) * (1 - rock[:,:])
 
-    # Sand pixels
+    # Sand (or snow?) safe driving pixels
     sxpix, sypix = rover_coords(sand)
     sxpixt, sypixt = trim_coords(sxpix, sypix, 50)
-
-    # Pick out the "front" pixels in the 1m wide 2m long section in front of the rover
-    # We use these to control speed and forward motion.  They are the ground right in front
-    # of the rover.
-    # Pixels are 10 units per meter so we trim to a 10x20 pixel area.
-    # 0,0 is in front of us.  Y is _- 5 pix, x 20 is two meters in front of us (approx)
-
-    safe_zone_width = 15 # pixels (aka 1 meter per 10 pixel)
-    safe_zone_depth = 20 + Rover.max_vel * 5
-
-
-    fxylist  = [xy for xy in zip(sxpix, sypix) if xy[0] <= safe_zone_depth and abs(xy[1]) <= safe_zone_width/2]
-    fxpix = [xy[0] for xy in fxylist]
-    fypix = [xy[1] for xy in fxylist]
 
     # Rock pixels
     rxpix, rypix = rover_coords(rock)
@@ -241,6 +227,69 @@ def perception_step(Rover):
     # Wall pixels
     wxpix, wypix = rover_coords(wall)
     wxpix, wypix = trim_coords(wxpix, wypix, 80)
+
+    #
+    # Convert sand pixels to polar
+    #
+
+    Rover.nav_dists, Rover.nav_angles = to_polar_coords(sxpix, sypix)
+
+    #
+    # Calculate suggested safe heading forward as simple mean of angles
+    # Convert from rads to degs as well
+    #
+
+    Rover.safe_angle = 0.0
+    if len(Rover.nav_angles) > 0:
+        Rover.safe_angle = np.mean(Rover.nav_angles) * 180.0 / np.pi
+
+    #
+    # Calcuate safe estimaded forward speed in the direction of safe_angle
+    #
+    # Pick out the pixels that are in front of us, in a limited size box and use
+    # the number of pixels in this box, to judge safe speed in this direction.
+    # We draw a trapazoid box that is 15 units wide (1.5 meters) becuase the frover is about 1m wide
+    # and the distance
+    #
+
+    safe_zone_width = 15 # pixels (aka 1 meter per 10 pixel)
+    safe_zone_depth = 20 + Rover.max_vel * 8
+
+    xoffset = np.sin(Rover.safe_angle * np.pi / 180.0)
+
+    fxylist  = [xy for xy in zip(sxpix, sypix) if xy[0] <= safe_zone_depth and abs(xy[1]-xoffset*xy[0]) <= safe_zone_width/2]
+    fxpix = [xy[0] for xy in fxylist]
+    fypix = [xy[1] for xy in fxylist]
+
+    # Distance is in pixels not meters (10 pixels per meter)
+
+    # Set target safe velocity forward based on path forward
+    # will go to zero if mean path forward is too small
+
+    # Base mean safe forwardd velocity on the number of pixels inside
+    # the blue froward safe zone.  Typical number when all safe is 360
+    # We calculate the actual safe limit by tracking the max number seen.
+    # That way we can change the size of the safe zone and it works ok.
+
+    global MaxSafePixelCnt
+
+    safe_pixel_cnt = len(fxpix)
+
+    MaxSafePixelCnt = max(MaxSafePixelCnt, safe_pixel_cnt)
+
+    # When safe count drops to 25% of max, vel will be down to zero
+    # When safe count drops to 20 pixels worth of depth, vel will drop to zero.
+    # This puts us two meters away from a wall when we tell the rover to stop.
+
+    max_vel = Rover.max_vel
+    zero_per = 20.0 / safe_zone_depth
+    zero_pixel_cnt_point = MaxSafePixelCnt * zero_per
+
+    # print("Max safe pixel cnt current, max:", safe_pixel_cnt, MaxSafePixelCnt)
+
+    v = (max_vel * (safe_pixel_cnt - zero_pixel_cnt_point)) / (MaxSafePixelCnt - zero_pixel_cnt_point)
+
+    Rover.safe_vel = np.clip(v, 0.0, max_vel)
 
     #
     # ROVER VISION DISPLAY
@@ -255,6 +304,16 @@ def perception_step(Rover):
         Rover.vision_image[160-np.int32(fxpix),160-np.int32(fypix),2] = 255
         Rover.vision_image[160-np.int32(fxpix),160-np.int32(fypix),0] = 0
 
+        flash = int(time.time()*2.0) % 2 == 1
+
+        if Rover.invisible_rock:
+            if flash:
+                cv2.putText(Rover.vision_image,"INVISIBLE ROCK", (25, 25), 
+                          cv2.FONT_HERSHEY_COMPLEX, 1.0, (255, 255, 255), 1)
+        elif Rover.saw_rock:
+            cv2.putText(Rover.vision_image,"ROCK", (110, 25), 
+                      cv2.FONT_HERSHEY_COMPLEX, 1.0, (255, 255, 255), 1)
+            
         if Rover.saw_rock:
             # Draw a yellow square where we think the rock is
             Rover.update_rock()
@@ -333,42 +392,9 @@ def perception_step(Rover):
         Rover.worldmap[rypix_world, rxpix_world, 1] = 1
         Rover.worldmap[sypix_world, sxpix_world, 2] = 1
 
-    Rover.nav_dists, Rover.nav_angles = to_polar_coords(sxpix, sypix) # (dists, angles)
 
-    # Distance is in pixels not meters (10 pixels per meter)
 
-    # Set target safe velocity forward based on path forward
-    # will go to zero if mean path forward is too small
 
-    # Base mean safe forwardd velocity on the number of pixels inside
-    # the blue froward safe zone.  Typical number when all safe is 360
-    # We calculate the actual safe limit by tracking the max number seen.
-    # That way we can change the size of the safe zone and it works ok.
-
-    global MaxSafePixelCnt
-
-    safe_pixel_cnt = len(fxpix)
-
-    MaxSafePixelCnt = max(MaxSafePixelCnt, safe_pixel_cnt)
-
-    # When safe count drops to 25% of max, vel will be down to zero
-
-    max_vel = Rover.max_vel
-    zero_per = .50
-    zero_pixel_cnt_point = MaxSafePixelCnt * zero_per
-
-    # print("Max safe pixel cnt current, max:", safe_pixel_cnt, MaxSafePixelCnt)
-
-    v = (max_vel * (safe_pixel_cnt - zero_pixel_cnt_point)) / (MaxSafePixelCnt - zero_pixel_cnt_point)
-
-    Rover.safe_vel = np.clip(v, 0.0, max_vel)
-
-    if len(Rover.nav_angles) == 0:
-        Rover.safe_angle = 0.0
-    else:
-        Rover.safe_angle = np.mean(Rover.nav_angles) * 180.0 / np.pi
-
-    #
     # Now the ROCKs!
     # We both spot rocks, and remember when we last saw it.  The memory
     # is needed because sometimes we see a rock, but can't stop fast enough.
@@ -382,6 +408,7 @@ def perception_step(Rover):
 
     if Rover.rock_pixels > 1:  # Must be more than 1 pix to cont as rock
         Rover.see_rock = True
+        Rover.invisible_rock = False
 
         dists, angles = to_polar_coords(rxpix, rypix)
 
@@ -407,14 +434,37 @@ def perception_step(Rover):
 
         Rover.saw_rock = True
         Rover.saw_time = time.time() # Record time we last saw a rock!
+        Rover.rock_forget_time = Rover.saw_time + 4 # 4 seconds to forget
 
         # rock_dist and rock_angle stay valid from last time we saw a rock
         # even if we don't currently see it
 
-    if (not Rover.see_rock) and Rover.saw_rock and Rover.saw_time + 4.0 < time.time():
-        # it's been 2 seconds and we didn't find it, forget we ever saw it.
+    if not Rover.see_rock and Rover.saw_rock and Rover.rock_forget_time < time.time():
+        # it's been many seconds and we didn't find it, forget we ever saw it.
         #print("MEMORY OF ROCK FADES, TIME IS", time.time(), " saw it at ", Rover.saw_time)
         Rover.saw_rock = False
+        Rover.invisible_rock = False
+
+    # Hunt for the invisible rock!
+
+    if 0:
+        # fake the smell for testing but only if the real invissarock is not in the set
+        if (len(Rover.samples_pos) > 0 and Rover.samples_pos[0][0] != 70) and \
+            not Rover.saw_rock and not Rover.near_sample and not Rover.picking_up:
+            # Fake the smell of an invisble rock for testing invisa-rock code if we are close to the location
+            if np.sqrt((Rover.pos[0]-70.0)**2 + (Rover.pos[1]-87.0)**2) < 1:
+                print("FAKE ROCK SMELL")
+                Rover.near_sample = True
+        
+    if not Rover.saw_rock and not Rover.picking_up and Rover.near_sample: # Geiger counter is buzzing like crazy!
+        Rover.saw_rock = True
+        Rover.invisible_rock = True
+        Rover.rock_xpix_world = Rover.pos[0]
+        Rover.rock_ypix_world = Rover.pos[1]
+        Rover.saw_time = time.time() # Record time we last smelled the rock!
+        Rover.rock_forget_time = Rover.saw_time + 15 # 15 seconds to turn around and get it
+        Rover.worldmap[np.int_(Rover.rock_ypix_world), np.int_(Rover.rock_xpix_world)] = 1
+        # update_rock() will set the rest
 
     Rover.update_rock() # only does sommething if we are in rock_saw mode
 
@@ -432,6 +482,8 @@ def perception_step(Rover):
 
     print("Target SV:{:6.3f} SA:{:6.3f}".format(Rover.safe_vel, Rover.safe_angle), end='')
 
+    print(" Rocks:{}".format(Rover.rock_cnt), end='')
+
     if Rover.saw_rock:
         print(" ROCK", end='')
         if not Rover.see_rock:
@@ -440,6 +492,7 @@ def perception_step(Rover):
                 format(Rover.rock_angle, Rover.rock_dist, Rover.rock_pixels))
 
     print("")
+    print("rocks:", Rover.samples_pos)
 
     #print("Rover pos", Rover.pos, " Rocks to find:", Rover.samples_pos)
 
