@@ -149,8 +149,8 @@ def perspect_transform_old(img, src, dst):
 
 # Skip frames to solve CPU problems...
 
-Skip_ratio = 1.0/2.0 ## Skip 2 out of 3
 Skip_ratio = 2.0/3.0 ## Skip 2 out of 3
+Skip_ratio = 1.0/2.0 ## Skip 2 out of 3
 Skip_cnt = 0.0
 FramesSkipped = 0.0
 FramesTotal = 0.0
@@ -204,6 +204,8 @@ def perception_step(Rover):
 
     sand_rgb_thresh=(198,180,160)
     sand_rgb_thresh=(190,170,160)
+    # sand_rgb_thresh=(180,170,160)
+    sand_rgb_thresh=(160,160,160)
 
     rock_rgb_thresh=(150,150,100)
     rock_rgb_thresh=(100,100,60)
@@ -355,6 +357,8 @@ def perception_step(Rover):
     zero_per = .50
     zero_pixel_cnt_point = MaxSafePixelCnt * zero_per
 
+    # print("Max safe pixel cnt current, max:", safe_pixel_cnt, MaxSafePixelCnt)
+
     v = (max_vel * (safe_pixel_cnt - zero_pixel_cnt_point)) / (MaxSafePixelCnt - zero_pixel_cnt_point)
 
     Rover.safe_vel = np.clip(v, 0.0, max_vel)
@@ -421,17 +425,19 @@ def perception_step(Rover):
     # Rover.fps calcuated in drive_rover.py and passed here just for info`
     # if we can't keep up, things start to go to go badly.
 
+    print("")
+
     if Rover.fps is not None:
-        print("")
         print("FPS {:3d} ".format(Rover.fps), end='')
 
     print("Target SV:{:6.3f} SA:{:6.3f}".format(Rover.safe_vel, Rover.safe_angle), end='')
 
-    if Rover.see_rock:
-        print(" -----------------------------  ROCK AT {:6.2f} deg, {:6.2f} distx, {} pixels". \
+    if Rover.saw_rock:
+        print(" ROCK", end='')
+        if not Rover.see_rock:
+            print(" WAS", end='')
+        print(" AT {:6.2f} deg, {:6.2f} distx, {} pixels". \
                 format(Rover.rock_angle, Rover.rock_dist, Rover.rock_pixels))
-    elif Rover.saw_rock:
-        print(" ++++++++++++++++++++++++++++++ SAW ROCK BUT IT'S GONE NOW ++++++++++++++++++++++")
 
     print("")
 

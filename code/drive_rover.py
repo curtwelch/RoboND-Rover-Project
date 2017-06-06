@@ -1,4 +1,3 @@
-#Do the necessary imports
 import argparse
 import shutil
 import base64
@@ -71,7 +70,6 @@ class RoverState():
         self.max_vel = 4.5 # Maximum velocity (meters/second) that perception will recommend
         self.safe_vel = 0 # calculcated safe driving speed (0 when no path forward)
         self.safe_angle = 0 # percpetion 
-        self.estop = 0 # Emergency full speed stop
 
         # Rock tracking variables
         self.see_rock = False
@@ -91,11 +89,13 @@ class RoverState():
 
         self.mode = 'stop' # Current mode (can be forward or stop or spin or stuck)
 
-        self.spin_best_safe_vel = 0.0
+        self.spin_best_angles = 0.0
         self.spin_cnt = 0
 
         self.stuck_cnt = 0
         self.stuck_end = 0
+
+        self.forward_stuck_cnt = 0
 
         self.throttle_max = 1.0 # max throttle setting
         self.brake_max = 10 # max brake setting when braking

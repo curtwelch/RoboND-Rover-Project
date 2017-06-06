@@ -10,7 +10,7 @@ def decision_set_stuck(Rover, forward=False):
     Rover.mode = 'stuck'
 
     Rover.stuck_cnt = 0
-    Rover.stuck_end = 10 + random.random() * 100
+    Rover.stuck_end = 10 + random.random() * 200
 
     Rover.brake = 0.0
     Rover.throttle = 0.0
@@ -39,7 +39,6 @@ def decision_set_stuck(Rover, forward=False):
         if random.random() > 0.5:
             Rover.throttle_current = -Rover.throttle_current # Try reverse
         Rover.target_angle = np.clip(random.random() * 30 - 15, -15, 15)
-        print("STUCK THROTTLE IS", Rover.throttle_current)
 
     Rover.brake = 0.0
     Rover.throttle = Rover.throttle_current
@@ -71,9 +70,10 @@ def decision_mode_stuck(Rover):
     return Rover
 
 def decision_set_forward(Rover):
-    # Just change to forward mode, we will decided what to
-    # on next image frame
     Rover.mode = 'forward'
+    # Set small target_vel to prevent from being confused as hard break request!
+    Rover.target_vel = 0.01  # Must be greater than one not to be confused with hard break request
+    Rover.throttle_current = 0.0 # take the brake off
     Rover.forward_stuck_cnt = 0
     return Rover
 
@@ -94,24 +94,28 @@ def decision_mode_forward(Rover):
         # Otherwise, keep going forward and turn
         # Try to go forward even if there's no path forward
         Rover.target_angle = Rover.rock_angle
-        return Rover
+    else:
 
-    # Move forward at the perception recommended speed and direction
+        # Move forward at the perception recommended speed and direction
 
-    Rover.target_vel = Rover.safe_vel
-    Rover.target_angle = Rover.safe_angle
+        Rover.target_vel = Rover.safe_vel
+        Rover.target_angle = Rover.safe_angle
 
-    if Rover.target_vel == 0.0:
-        # means no path forward, set stop mode.
-        # Let stop figure out what to do
-        return decision_set_stop(Rover)
+        if Rover.target_vel == 0.0:
+            # means no path forward, set stop mode.
+            # Let stop figure out what to do
+            return decision_set_stop(Rover)
 
     if Rover.vel > Rover.target_vel or Rover.vel > 0.2:
         Rover.forward_stuck_cnt = 0     # not stuck
     else:
         Rover.forward_stuck_cnt += 1    # Might be stuck
 
-    if Rover.forward_stuck_cnt > 100:
+    stuck_limit = 100
+    if Rover.saw_rock:
+        stuck_limit = 300 # give us more time before we give up if we are rock seeking
+
+    if Rover.forward_stuck_cnt > stuck_limit:
         return decision_set_stuck(Rover)
 
     return Rover
@@ -159,9 +163,6 @@ def drive_rover(Rover):
             Rover.throttle_target = Rover.throttle_max
         else:
             Rover.throttle_target = -1.0  # (light braking possible)
-        if Rover.throttle_current < -1.0:
-            # Someone left the brake on.
-            Rover.throttle_current = 0
     else:
         # Assume target velocity is zero.  If fact, we just force it since
         # we don't support negative values
@@ -208,7 +209,7 @@ def drive_rover(Rover):
     return Rover
 
 def decision_set_stop(Rover):
-    print("SET MODE STOP")
+    # print("SET MODE STOP")
     # Set mode to "stop" and set target speed to zero.
     # Will stop quickly and smoothly, but not the same as
     # slaming on brakes!
@@ -293,14 +294,16 @@ def decision_set_spin(Rover, spin_angle):
     # a spin ever?  I could spend a few hours testing, but insted, I'll just guess.
 
     Rover.mode = 'spin'
-    Rover.target_vel = 0.0 # output control will stop and release brake in theory
+    Rover.target_vel = 0.0
+    # Take the brake off, don't wait -- we assume we are alrady stopped
+    # Only the "stop" ommand waits for the rover to stop
+    Rover.throttle_current = 0.0 # take the brake off
 
     # When stopped, setting steer will will induce 4-wheel turning
     Rover.target_angle = spin_angle ## aka spin speed and direction
 
     # Escape checking
-    Rover.spin_best_safe_vel = 0.0
-    Rover.spin_best_angles = 0.0
+    Rover.spin_best_angles = 0
     Rover.spin_cnt = 0
 
     return Rover
@@ -311,6 +314,8 @@ def decision_mode_spin(Rover):
 
     # Spinning is controlled by the drive_rover() function
     # But here is where decided when to stop and what to do next.
+
+    spin_exit_velocity = min(1.0, Rover.max_vel * 0.70)
 
     if Rover.near_sample:
         # Stop and pick up rock
@@ -333,7 +338,7 @@ def decision_mode_spin(Rover):
             # We could just reverse direction but looping through
             # the stop code allows for more advanced behavior in theory.
             return decision_set_stop(Rover);
-    elif Rover.safe_vel > 1.0:
+    elif Rover.safe_vel > spin_exit_velocity:
         # Good sold path forward -- take it.  Stop spinning and drive.
         return decision_set_stop(Rover);
 
@@ -341,20 +346,19 @@ def decision_mode_spin(Rover):
 
     # Track the quality of optional escape paths forward as we spin.
 
-    Rover.spin_best_safe_vel = max(Rover.spin_best_safe_vel, Rover.safe_vel)
     Rover.spin_best_angles = max(Rover.spin_best_angles, len(Rover.nav_angles))
+    Rover.spin_best_angles += (0 - Rover.spin_best_angles) * 0.01 # slow decay to forget what we saw
     Rover.spin_cnt += 1
-    
-    print("Spin cnt is", Rover.spin_cnt)
-    print("best safe vel", Rover.spin_best_safe_vel, " best angles", Rover.spin_best_angles)
 
+    # print("spin cnt", Rover.spin_cnt, "angles", len(Rover.nav_angles), "best angles", Rover.spin_best_angles)
+    
     if Rover.spin_cnt > 200:
        # We have to escape this spinning, I'm getting sick
        if Rover.spin_best_angles > 0: # we have seen something worth trying
            five_percent = Rover.spin_best_angles * 0.05
            if len(Rover.nav_angles) > Rover.spin_best_angles - five_percent:
                # Close enough, lets boogie
-               # Have to force an exit attempt using special stuck mode
+               # Must force an exit attempt using special stuck mode
                return decision_set_stuck(Rover, forward=True)
        else:
            # crap, no possible paths forward seen at all, we are stuck
