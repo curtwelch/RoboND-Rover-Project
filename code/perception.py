@@ -62,6 +62,14 @@ def trim_coords(x_pixel, y_pixel, distance):
     x_pixel = np.float32([x for (y, x) in yx])
     return x_pixel, y_pixel
 
+def thin_coords(x_pixel, y_pixel, percent=0.50):
+    n = 0.0
+    yx = [(y, x) for (y, x) in zip(y_pixel, x_pixel) if (float(x)*float(y)) % 10.0 > percent * 10.0 ]
+    y_pixel = np.float32([y for (y, x) in yx])
+    x_pixel = np.float32([x for (y, x) in yx])
+    return x_pixel, y_pixel
+        
+
 # Convert to radial coords in the rover space
 def to_polar_coords(x_pixel, y_pixel):
     # Convert (x_pixel, y_pixel) to (distance, angle) 
@@ -147,9 +155,9 @@ def perspect_transform_old(img, src, dst):
     
     return warped
 
-# Skip frames to solve CPU problems...
+# Skip processing of new video frames to speed up FPS
 
-Skip_ratio = 1.0/2.0 ## Skip 2 out of 3
+Skip_ratio = 1.0/2.0 ## Skip 1 out of 2
 Skip_ratio = 2.0/3.0 ## Skip 2 out of 3
 Skip_cnt = 0.0
 FramesSkipped = 0.0
@@ -219,6 +227,12 @@ def perception_step(Rover):
 
     # Sand (or snow?) safe driving pixels
     sxpix, sypix = rover_coords(sand)
+
+    # Thin the list by randomly thowing pixels away.
+    # n = len(sxpix)
+    # sxpix, sypix = thin_coords(sxpix, sypix, percent=.50)
+    # print("Before thin sand pix are", n, "after they are", len(sxpix))
+
     sxpixt, sypixt = trim_coords(sxpix, sypix, 50)
 
     # Rock pixels
@@ -296,23 +310,42 @@ def perception_step(Rover):
     #
 
     if 1: # overlay threshold ground on camera image
-        #Rover.vision_image[:,:,:] = Rover.img[:,:,:]
-        Rover.vision_image[:,:,:] = np.zeros_like(Rover.img)
-        Rover.vision_image[:,:,0] = sand[:,:] * 255
-        #Rover.vision_image[:,:,1] = wall[:,:] * 255
-        Rover.vision_image[:,:,2] = rock[:,:] * 255
+        Rover.vision_image[:,:,:] = Rover.img[:,:,:]
+        # Rover.vision_image[:,:,:] = np.zeros_like(Rover.img)
+
+        # Rover.vision_image[:,:,0] = sand[:,:] * 255
+        # Rover.vision_image[:,:,1] = wall[:,:] * 255
+        # Rover.vision_image[:,:,2] = rock[:,:] * 255
+
+        Rover.vision_image[160-np.int32(sxpix),160-np.int32(sypix),0] = 255
+        Rover.vision_image[160-np.int32(sxpix),160-np.int32(sypix),1] = 0
+        Rover.vision_image[160-np.int32(sxpix),160-np.int32(sypix),2] = 0
+
         Rover.vision_image[160-np.int32(fxpix),160-np.int32(fypix),2] = 255
         Rover.vision_image[160-np.int32(fxpix),160-np.int32(fypix),0] = 0
 
-        flash = int(time.time()*2.0) % 2 == 1
+        # plot target_vel as white bar and vel as blue inside it
 
-        if Rover.invisible_rock:
-            if flash:
-                cv2.putText(Rover.vision_image,"INVISIBLE ROCK", (25, 25), 
-                          cv2.FONT_HERSHEY_COMPLEX, 1.0, (255, 255, 255), 1)
-        elif Rover.saw_rock:
-            cv2.putText(Rover.vision_image,"ROCK", (110, 25), 
-                      cv2.FONT_HERSHEY_COMPLEX, 1.0, (255, 255, 255), 1)
+        l = np.clip(np.int(335.0 * Rover.target_vel / 5.0), 0, 340) + 10 + 5
+        Rover.vision_image[5:15,10:l,0:3] = 255
+        l = np.clip(np.int(335.0 * Rover.vel / 5.0), 0, 340) + 10 + 5
+        Rover.vision_image[7:13,10:l] = (0,0,255)
+
+        # Plot throttle and brake
+
+        l = np.clip(np.int(150.0 * Rover.throttle / Rover.throttle_max), 0, 150)
+        Rover.vision_image[18:18+5,160:160+l] = (0, 255, 0)
+        l = np.clip(np.int(150.0 * Rover.brake / Rover.brake_max), 0, 340)
+        Rover.vision_image[18:18+5,160-l:160] = (255, 0, 0)
+
+
+        # ROCK message and square
+
+        flash = int(time.time()*4.0) % 4 == 0
+
+        if Rover.saw_rock and flash:
+            cv2.putText(Rover.vision_image, "ROCK", (10, 150), 
+                      cv2.FONT_HERSHEY_COMPLEX, 0.8, (0, 0, 0), 1)
             
         if Rover.saw_rock:
             # Draw a yellow square where we think the rock is
@@ -320,10 +353,11 @@ def perception_step(Rover):
             x = 160 - int(Rover.rock_xpix)
             y = 160 - int(Rover.rock_ypix)
             # print("ROCK x, y = ", x, y)
-            xmin = np.clip(x-4, 0, 320-1)
-            ymin = np.clip(y-4, 0, 320-1)
-            xmax = np.clip(x+4, 0, 320-1)
-            ymax = np.clip(y+4, 0, 320-1)
+            xmin = np.clip(x-4, 1, 320-2)
+            ymin = np.clip(y-4, 1, 320-2)
+            xmax = np.clip(x+4, 1, 320-2)
+            ymax = np.clip(y+4, 1, 320-2)
+            Rover.vision_image[xmin-1:xmax+1, ymin-1:ymax+1, 0:3] = 0 ## Black boundry
             if Rover.see_rock:
                 Rover.vision_image[xmin:xmax, ymin:ymax, 0:2] = 255 ## Yellow
             else:
@@ -408,7 +442,6 @@ def perception_step(Rover):
 
     if Rover.rock_pixels > 1:  # Must be more than 1 pix to cont as rock
         Rover.see_rock = True
-        Rover.invisible_rock = False
 
         dists, angles = to_polar_coords(rxpix, rypix)
 
@@ -443,9 +476,8 @@ def perception_step(Rover):
         # it's been many seconds and we didn't find it, forget we ever saw it.
         #print("MEMORY OF ROCK FADES, TIME IS", time.time(), " saw it at ", Rover.saw_time)
         Rover.saw_rock = False
-        Rover.invisible_rock = False
 
-    # Hunt for the invisible rock!
+    # Hunt for invisible rocks!
 
     if 0:
         # fake the smell for testing but only if the real invissarock is not in the set
@@ -458,13 +490,12 @@ def perception_step(Rover):
         
     if not Rover.saw_rock and not Rover.picking_up and Rover.near_sample: # Geiger counter is buzzing like crazy!
         Rover.saw_rock = True
-        Rover.invisible_rock = True
         Rover.rock_xpix_world = Rover.pos[0]
         Rover.rock_ypix_world = Rover.pos[1]
         Rover.saw_time = time.time() # Record time we last smelled the rock!
         Rover.rock_forget_time = Rover.saw_time + 15 # 15 seconds to turn around and get it
         Rover.worldmap[np.int_(Rover.rock_ypix_world), np.int_(Rover.rock_xpix_world)] = 1
-        # update_rock() will set the rest
+        # The call to update_rock() will set the rest
 
     Rover.update_rock() # only does sommething if we are in rock_saw mode
 

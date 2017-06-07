@@ -77,7 +77,6 @@ class RoverState():
         self.rock_angle = 0
         self.rock_dist = 0
         self.saw_rock = False
-        self.invisible_rock = False
         self.saw_time = time.time()
         self.rock_xpix = 0 # Rover centric coords
         self.rock_ypix = 0

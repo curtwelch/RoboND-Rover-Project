@@ -162,6 +162,7 @@ def drive_rover(Rover):
             # Throttle UP
             Rover.throttle_target = Rover.throttle_max
         else:
+            Rover.throttle_target = -Rover.brake_max  # Try heaving braking
             Rover.throttle_target = -1.0  # (light braking possible)
     else:
         # Assume target velocity is zero.  If fact, we just force it since
