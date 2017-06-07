@@ -326,16 +326,19 @@ def perception_step(Rover):
 
         # plot target_vel as white bar and vel as blue inside it
 
-        l = np.clip(np.int(335.0 * Rover.target_vel / 5.0), 0, 340) + 10 + 5
+        l = np.clip(np.int(300.0 * Rover.target_vel / 5.0), 0, 340) + 10 
         Rover.vision_image[5:15,10:l,0:3] = 255
-        l = np.clip(np.int(335.0 * Rover.vel / 5.0), 0, 340) + 10 + 5
+        l = np.clip(np.int(300.0 * Rover.vel / 5.0), 0, 340) + 10
         Rover.vision_image[7:13,10:l] = (0,0,255)
 
         # Plot throttle and brake
+        # Brake is 0 to 1.5 on graph even though it's 0 to 10 in real life.
+        # We clip becuase we want to display what the throttle PID is doing with
+        # the brake
 
         l = np.clip(np.int(150.0 * Rover.throttle / Rover.throttle_max), 0, 150)
         Rover.vision_image[18:18+5,160:160+l] = (0, 255, 0)
-        l = np.clip(np.int(150.0 * Rover.brake / Rover.brake_max), 0, 340)
+        l = np.clip(np.int(150.0 * Rover.brake / 1.5), 0, 150)
         Rover.vision_image[18:18+5,160-l:160] = (255, 0, 0)
 
 

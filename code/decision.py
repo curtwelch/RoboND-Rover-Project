@@ -262,25 +262,23 @@ def drive_rover(Rover):
     # So for now, lets not use negative throttle
 
     # Try allowing negative throttle again
-    # Rover.throttle_current = np.clip(throttle, 0.0, Rover.throttle_max)
+    Rover.throttle_current = np.clip(throttle, 0.0, Rover.throttle_max)
+    # Allow PID to create negative throttle, but make it break, instead
+    # of using negative throttle since negative throttle causes strange speed jump from
+    # 3 down to 2.  Braking seems smooth and real like.
     Rover.throttle_current = np.clip(throttle, -Rover.throttle_max, Rover.throttle_max)
 
     print("PID err:{:5.2f}  sum:{:5.2f} dif:{:5.2f}".format(err, sum, diff))
     print("      P:{:5.2f}    I:{:5.2f}   D:{:5.2f}".format(p*err, i*sum, d*diff))
     print("      t:{:5.2f} clip:{:5.2f}".format(throttle, Rover.throttle_current))
 
-    Rover.throttle = np.clip(Rover.throttle_current, -Rover.throttle_max, Rover.throttle_max)
+    Rover.throttle = np.clip(Rover.throttle_current, 0.0, Rover.throttle_max)
+    Rover.brake = np.clip(-Rover.throttle_current, 0.0, Rover.brake_max)
 
     if Rover.target_vel == 0.0:
         # Ignore the PID value and just do a hard stop
         Rover.throttle = 0.0
         Rover.brake = Rover.brake_max
-    else:
-        if throttle < 0.0:
-            Rover.brake = 0.5 # small brake
-            Rover.brake = 0.0 # take the brake off
-        else:
-            Rover.brake = 0.0 # take the brake off
 
     #
     # Now set steering
