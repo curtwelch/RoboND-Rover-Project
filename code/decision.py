@@ -16,9 +16,10 @@ def decision_set_stuck(Rover, forward=False):
     Rover.throttle = 0.0
     Rover.steer = 0.0
 
-    # We set throttle_current to desired throttle and
-    # and target_angle to desired steer and reset it on each call
-    # just in case server overwrites them.
+    # throttle_current and target_angle hold our deired
+    # throttle and steer values so we can reset throttle
+    # and steer on each cycle because we can't trust the simulator
+    # won't change the values of throttle and steer.
 
     if forward:
         # Special request to try and just drive forward (from spin)
@@ -72,7 +73,7 @@ def decision_mode_stuck(Rover):
 def decision_set_forward(Rover):
     Rover.mode = 'forward'
     # Set small target_vel to prevent from being confused as hard break request!
-    Rover.target_vel = 0.01  # Must be greater than one not to be confused with hard break request
+    Rover.target_vel = 0.01  # Must be greater than zero not to be confused with hard break request
     Rover.throttle_current = 0.0 # take the brake off
     Rover.forward_stuck_cnt = 0
     return Rover
@@ -120,7 +121,7 @@ def decision_mode_forward(Rover):
 
     return Rover
 
-def drive_rover(Rover):
+def drive_rover_old(Rover):
     # Control the throttle and brake to regulate Rover.vel to Rover.target_vel
     # Steer towards Rover.target_angle
     # Basically a type of PID-like cotroller to create smoother driving behavior.
@@ -206,6 +207,92 @@ def drive_rover(Rover):
     else:
         # driving -- set to half of the angle
         Rover.steer = np.clip(Rover.target_angle/2.0, -15, 15)
+
+    return Rover
+
+def drive_rover(Rover):
+
+    # Yet another rewrite.  Just going to use a real PID to control the speeed now.
+
+    # target_vel is the input here.  If 0, it means hard break (10), else we
+    # regulate throttle using PID to control vel. Negative throttle is both used and
+    # supported now. As well as negative target_vel to drive backwards.
+
+    # Control the throttle and brake to regulate Rover.vel to Rover.target_vel
+    # Steer towards Rover.target_angle
+
+    # The sim allows huge values of throttle (100+) but we limit to 1.0 except
+    # when trying to escape a stuck condition.  Sim regualtes velocity to 5.0 m/s
+
+    # Note: Rover.vel can go negative when stopping and rocking
+
+    if Rover.mode == 'stuck':
+        # we reset these for stuck mode to keep them from being reset
+        Rover.brake = 0
+        Rover.throttle = Rover.throttle_current
+        Rover.steer = np.clip(Rover.target_angle, -15, 15)
+        return Rover
+
+    if Rover.mode == 'spin':
+        Rover.throttle = 0
+        Rover.brake = 0
+        Rover.steer = np.clip(Rover.target_angle, -15, 15)
+        return Rover
+
+    # the rest is code for mode forward and mode stop
+
+    # Set Rover.throttle using PID to regulate Rover.vel to Rover.target_vel
+
+    err = Rover.target_vel - Rover.vel # Postive error needs for postive throttle
+    Rover.throttle_PID_sum += err
+    sum = Rover.throttle_PID_sum
+    diff = Rover.throttle_PID_err - err
+    Rover.throttle_PID_err = err # save last err
+
+    p = Rover.throttle_PID_P
+    i = Rover.throttle_PID_I
+    d = Rover.throttle_PID_D
+
+    # No adjustements for time -- I'm assuming the time between updates will
+    # be fairly constant
+
+    throttle = p * err + i * sum + d * diff
+
+    # Neg throttle causes odd sudden jump down in veloiety -- not real
+    # So for now, lets not use negative throttle
+
+    # Try allowing negative throttle again
+    # Rover.throttle_current = np.clip(throttle, 0.0, Rover.throttle_max)
+    Rover.throttle_current = np.clip(throttle, -Rover.throttle_max, Rover.throttle_max)
+
+    print("PID err:{:5.2f}  sum:{:5.2f} dif:{:5.2f}".format(err, sum, diff))
+    print("      P:{:5.2f}    I:{:5.2f}   D:{:5.2f}".format(p*err, i*sum, d*diff))
+    print("      t:{:5.2f} clip:{:5.2f}".format(throttle, Rover.throttle_current))
+
+    Rover.throttle = np.clip(Rover.throttle_current, -Rover.throttle_max, Rover.throttle_max)
+
+    if Rover.target_vel == 0.0:
+        # Ignore the PID value and just do a hard stop
+        Rover.throttle = 0.0
+        Rover.brake = Rover.brake_max
+    else:
+        if throttle < 0.0:
+            Rover.brake = 0.5 # small brake
+            Rover.brake = 0.0 # take the brake off
+        else:
+            Rover.brake = 0.0 # take the brake off
+
+    #
+    # Now set steering
+    #
+
+    # target_angle is where we want to go -- but we set steering
+    # to half that and turns torwards in -- reduces osscilations.
+    # When spinning, steer ends up controlling spin speed. (throttle is zero)
+
+    # driving -- set to half of the angle
+
+    Rover.steer = np.clip(Rover.target_angle/2.0, -15, 15)
 
     return Rover
 
@@ -308,7 +395,7 @@ def decision_set_spin(Rover, spin_angle):
     # Only the "stop" ommand waits for the rover to stop
     Rover.throttle_current = 0.0 # take the brake off
 
-    # When stopped, setting steer will will induce 4-wheel turning
+    # When stopped, setting steer will induce 4-wheel turning
     Rover.target_angle = spin_angle ## aka spin speed and direction
 
     # Escape checking

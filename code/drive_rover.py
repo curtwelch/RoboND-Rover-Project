@@ -56,7 +56,7 @@ class RoverState():
         self.ground_truth = ground_truth_3d # Ground truth worldmap
 
         #
-        # Percpetion
+        # Perception
         #
         
         self.nav_vecgtors = None # list of vectors -- borken into angles and dists below
@@ -66,8 +66,8 @@ class RoverState():
         # Perception recomendations for vel and angle (output to decision code)
         # Must have max_vel less than the max of the simulator so
         # the over can go over the max and we learn to throttle back.
-        # Simulator max is 5.0, so we set our target speed to 4.5
-        self.max_vel = 4.5 # Maximum velocity (meters/second) that perception will recommend
+        # Simulator max is 5.0, so we set our target speed to 4.0
+        self.max_vel = 4.0 # Maximum velocity (meters/second) that perception will recommend
         self.safe_vel = 0 # calculcated safe driving speed (0 when no path forward)
         self.safe_angle = 0 # percpetion 
 
@@ -106,6 +106,13 @@ class RoverState():
 
         self.throttle_target = 0.0 # Negative means break
         self.throttle_current = 0.0 # (what we last set break/throttle to)
+
+        self.throttle_PID_err = 0.0 # last error value
+
+        self.throttle_PID_P = 0.5 
+        self.throttle_PID_I = 0.0001
+        self.throttle_PID_sum = 3000.0 # sum for the I term.
+        self.throttle_PID_D = -1.0
 
         # throttle_current is like acceleration.  Postive means we set the throttle
         # to this value, and the break is off.  Negative means throttle is off, and
@@ -210,8 +217,6 @@ def telemetry(sid, data):
 
             # Send zeros for throttle, brake and steer and empty images
             send_control((0, 0, 0), '', '')
-            # could this be a problem??? CW
-            print("SEND ZEROS DUE TO INVALID Rover.vel")
 
         # If you want to save camera images from autonomous driving specify a path
         # Example: $ python drive_rover.py image_folder_path
