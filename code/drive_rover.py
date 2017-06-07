@@ -111,9 +111,8 @@ class RoverState():
 
         self.throttle_PID_P = 0.5 
         self.throttle_PID_I = 0.0001
-        self.throttle_PID_sum = 3000.0 # sum for the I term.
-        self.throttle_PID_D = -1.0 # neg dampens change, postive speeds up changek
-        self.throttle_PID_D = 1.0 # neg dampens change, postive speeds up changek
+        self.throttle_PID_sum = 3000.0 # starting sum for the I term.
+        self.throttle_PID_D = 1.0 # positive dampens change (to prevent oscillation), negative speeds up converging
 
         # throttle_current is like acceleration.  Postive means we set the throttle
         # to this value, and the break is off.  Negative means throttle is off, and

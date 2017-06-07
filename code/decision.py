@@ -88,7 +88,9 @@ def decision_mode_forward(Rover):
         # We saw or still see a rock, but aren't close enough to grab it.
         # Are we headed towareds it?  If so, keep going
         # if not, stop, and spin to turn towards it
-        Rover.target_vel = 1.0 # Slow speed rock hunting
+
+        Rover.target_vel = 0.5 # Slow speed rock hunting
+
         if abs(Rover.rock_angle) > 40: # Stop and spin
             #print("SEE A ROCK STOP AND SPIN")
             return decision_set_stop(Rover)
@@ -193,12 +195,12 @@ def decision_drive_PID(Rover):
     err = Rover.target_vel - Rover.vel # Postive error means we need postive throttle (postive P)
     Rover.throttle_PID_sum += err
     sum = Rover.throttle_PID_sum
-    diff = Rover.throttle_PID_err - err
+    diff = err - Rover.throttle_PID_err 
     Rover.throttle_PID_err = err # save last err
 
     p = Rover.throttle_PID_P
     i = Rover.throttle_PID_I
-    d = Rover.throttle_PID_D # negative D needed to damp fast change
+    d = Rover.throttle_PID_D # postive to damp fast change
 
     # No adjustements for time (dt) -- I'm assuming the time between updates will
     # be fairly constant
