@@ -4,6 +4,8 @@ import math
 import sys
 import time
 
+# just a comment to make a change to help me figure out git
+
 # return the mean distances and mean angles for a list of polar (dist, angle) points
 # Needed this function to deal with null lists correclty
 def vector_means(v):
