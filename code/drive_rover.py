@@ -207,8 +207,8 @@ def telemetry(sid, data):
             # The action step!  Send commands to the rover!
  
             # Don't send both of these, they both trigger the simulator
-            # to send back new telimetery so we must only send one
-            # back in respose to this data.
+            # to send back new telemetry so we must only send one
+            # back in respose to the current telemetry data.
 
             # If in a state where want to pickup a rock send pickup command
             if Rover.send_pickup and not Rover.picking_up:
