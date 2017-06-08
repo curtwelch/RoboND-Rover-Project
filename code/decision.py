@@ -101,10 +101,10 @@ def decision_mode_forward(Rover):
 
         # Move forward at the perception recommended speed and direction
 
-        Rover.target_vel = Rover.safe_vel
+        Rover.target_vel = np.clip(Rover.safe_vel, 0.0, Rover.max_vel)
         Rover.target_angle = Rover.safe_angle
 
-        if Rover.target_vel == 0.0:
+        if Rover.target_vel <= 0.0:
             # means no path forward, set stop mode.
             # Let stop figure out what to do
             return decision_set_stop(Rover)
@@ -324,6 +324,7 @@ def decision_set_spin(Rover, spin_angle):
 
     # Escape checking
     Rover.spin_best_angles = 0
+    Rover.spin_best_vel = None
     Rover.spin_cnt = 0
 
     return Rover
@@ -358,7 +359,7 @@ def decision_mode_spin(Rover):
             # We could just reverse direction but looping through
             # the stop code allows for more advanced behavior in theory.
             return decision_set_stop(Rover);
-    elif Rover.safe_vel > spin_exit_velocity:
+    elif Rover.safe_vel > spin_exit_velocity and abs(Rover.safe_angle) < 10:
         # Good sold path forward -- take it.  Stop spinning and drive.
         return decision_set_stop(Rover);
 
@@ -367,25 +368,40 @@ def decision_mode_spin(Rover):
     # Track the quality of optional escape paths forward as we spin.
 
     Rover.spin_best_angles = max(Rover.spin_best_angles, len(Rover.nav_angles))
-    Rover.spin_best_angles += (0 - Rover.spin_best_angles) * 0.01 # slow decay to forget what we saw
+    # Rover.spin_best_angles += (0 - Rover.spin_best_angles) * 0.01 # slow decay to forget what we saw
+
+    # perrcpetion now returns neg v for bad options but this gives us a way to
+    # rate how bad they are and take the best.  So try this...
+    
+    if Rover.spin_best_vel is None:
+        Rover.spin_best_vel = Rover.safe_vel # can be negative
+    Rover.spin_best_vel = max(Rover.spin_best_vel, Rover.safe_vel)
+
     Rover.spin_cnt += 1
 
     # print("spin cnt", Rover.spin_cnt, "angles", len(Rover.nav_angles), "best angles", Rover.spin_best_angles)
     
     if Rover.spin_cnt > 200:
        # We have to escape this spinning, I'm getting sick
-       if Rover.spin_best_angles > 0: # we have seen something worth trying
-           five_percent = Rover.spin_best_angles * 0.05
-           if len(Rover.nav_angles) > Rover.spin_best_angles - five_percent:
+       if Rover.spin_best_vel is not None: # we have seen something worth trying
+           one_percent = Rover.spin_best_vel * 0.01
+           if Rover.safe_vel > Rover.spin_best_vel - one_percent:
                # Close enough, lets boogie
                # Must force an exit attempt using special stuck mode
                return decision_set_stuck(Rover, forward=True)
+       elif 0:
+           if Rover.spin_best_angles > 0: # we have seen something worth trying
+               five_percent = Rover.spin_best_angles * 0.05
+               if len(Rover.nav_angles) > Rover.spin_best_angles - five_percent:
+                   # Close enough, lets boogie
+                   # Must force an exit attempt using special stuck mode
+                   return decision_set_stuck(Rover, forward=True)
        else:
            # crap, no possible paths forward seen at all, we are stuck
            return decision_set_stuck(Rover)
 
     if Rover.spin_cnt > 400:
-        # Oh my, we really are stuck, just bale
+        # Oh my, we really are stuck, just bail
         return decision_set_stuck(Rover)
    
     return Rover

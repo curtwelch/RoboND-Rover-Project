@@ -4,8 +4,6 @@ import math
 import sys
 import time
 
-# just a comment to make a change to help me figure out git
-
 # return the mean distances and mean angles for a list of polar (dist, angle) points
 # Needed this function to deal with null lists correclty
 def vector_means(v):
@@ -159,8 +157,9 @@ def perspect_transform_old(img, src, dst):
 
 # Skip processing of new video frames to speed up FPS
 
-Skip_ratio = 1.0/2.0 ## Skip 1 out of 2
 Skip_ratio = 2.0/3.0 ## Skip 2 out of 3
+Skip_ratio = 0.0 # Don't skip anything
+Skip_ratio = 1.0/2.0 ## Skip 1 out of 2
 Skip_cnt = 0.0
 FramesSkipped = 0.0
 FramesTotal = 0.0
@@ -255,9 +254,9 @@ def perception_step(Rover):
     # Convert from rads to degs as well
     #
 
-    Rover.safe_angle = 0.0
+    Rover.nav_mean = 0.0
     if len(Rover.nav_angles) > 0:
-        Rover.safe_angle = np.mean(Rover.nav_angles) * 180.0 / np.pi
+        Rover.nav_mean = np.mean(Rover.nav_angles) * 180.0 / np.pi
 
     #
     # Calcuate safe estimaded forward speed in the direction of safe_angle
@@ -271,41 +270,85 @@ def perception_step(Rover):
     safe_zone_width = 15 # pixels (aka 1 meter per 10 pixel)
     safe_zone_depth = 20 + Rover.max_vel * 8
 
-    xoffset = np.sin(Rover.safe_angle * np.pi / 180.0)
+    # Check path forward in 5 deg steps from -15 to +15
+    best_angle = None
+    best_v = 0
+    largest_v = None
 
-    fxylist  = [xy for xy in zip(sxpix, sypix) if xy[0] <= safe_zone_depth and abs(xy[1]-xoffset*xy[0]) <= safe_zone_width/2]
-    fxpix = [xy[0] for xy in fxylist]
-    fypix = [xy[1] for xy in fxylist]
+    #
+    # Order of angles in for list is important.
+    # Logic picks last one in list that is withing x percent of best v
+    # Whatever angles you want the rover to perfer, put them last
+    #
 
-    # Distance is in pixels not meters (10 pixels per meter)
+    # This order creates follow left wall behavior (postive is to the left)
+    for angle in (-30, -20, -10, -5, -2, 0, 2, 5, 10, 20, 30):
+        xoffset = np.sin(angle * np.pi / 180.0)
 
-    # Set target safe velocity forward based on path forward
-    # will go to zero if mean path forward is too small
+        fxylist  = [xy for xy in zip(sxpix, sypix) if xy[0] <= safe_zone_depth and abs(xy[1]-xoffset*xy[0]) <= safe_zone_width/2]
+        fxpix = [xy[0] for xy in fxylist]
+        fypix = [xy[1] for xy in fxylist]
 
-    # Base mean safe forwardd velocity on the number of pixels inside
-    # the blue froward safe zone.  Typical number when all safe is 360
-    # We calculate the actual safe limit by tracking the max number seen.
-    # That way we can change the size of the safe zone and it works ok.
+        # Distance is in pixels not meters (10 pixels per meter)
 
-    global MaxSafePixelCnt
+        # Set target safe velocity forward based on path forward
+        # will go to zero if mean path forward is too small
 
-    safe_pixel_cnt = len(fxpix)
+        # Base mean safe forwardd velocity on the number of pixels inside
+        # the blue froward safe zone.  Typical number when all safe is 360
+        # We calculate the actual safe limit by tracking the max number seen.
+        # That way we can change the size of the safe zone and it works ok.
 
-    MaxSafePixelCnt = max(MaxSafePixelCnt, safe_pixel_cnt)
+        global MaxSafePixelCnt
 
-    # When safe count drops to 25% of max, vel will be down to zero
-    # When safe count drops to 20 pixels worth of depth, vel will drop to zero.
-    # This puts us two meters away from a wall when we tell the rover to stop.
+        safe_pixel_cnt = len(fxpix)
 
-    max_vel = Rover.max_vel
-    zero_per = 20.0 / safe_zone_depth
-    zero_pixel_cnt_point = MaxSafePixelCnt * zero_per
+        MaxSafePixelCnt = max(MaxSafePixelCnt, safe_pixel_cnt)
 
-    # print("Max safe pixel cnt current, max:", safe_pixel_cnt, MaxSafePixelCnt)
+        # When safe count drops to 25% of max, vel will be down to zero
+        # When safe count drops to 20 pixels worth of depth, vel will drop to zero.
+        # This puts us two meters away from a wall when we tell the rover to stop.
 
-    v = (max_vel * (safe_pixel_cnt - zero_pixel_cnt_point)) / (MaxSafePixelCnt - zero_pixel_cnt_point)
+        # Slow down as the time goes on to cause default paths to tend to change and increase the odds
+        # of finding rocks that are hard to see
 
-    Rover.safe_vel = np.clip(v, 0.0, max_vel)
+        max_vel = Rover.max_vel
+        if Rover.total_time is not None:
+            # Reduce 10% per minute down to v of 2.5
+            max_vel = np.clip(Rover.max_vel * 1.0 - (Rover.total_time * 0.10 / 60.0), 2.5, Rover.max_vel)
+
+        print("Time is", Rover.total_time, " current max vel is", max_vel)
+
+        zero_per = 20.0 / safe_zone_depth
+        zero_pixel_cnt_point = MaxSafePixelCnt * zero_per
+
+        # print("Max safe pixel cnt current, max:", safe_pixel_cnt, MaxSafePixelCnt)
+
+        v = (max_vel * (safe_pixel_cnt - zero_pixel_cnt_point)) / (MaxSafePixelCnt - zero_pixel_cnt_point)
+
+        print("Check path for angle {:5.1f} v is {:6.1f}".format(angle, v), end='')
+
+        #if best_angle is None or v > best_v or angle == 0 and v == best_v:
+            # pick angle 0 -- straight ahead on tie for best
+
+        if best_angle is None or v > largest_v * 0.99:
+            best_angle = angle
+            best_v = v
+            if largest_v is None:
+                largest_v = v
+            largest_v = max(largest_v, v)
+            best_fxpix = fxpix
+            best_fypix = fypix
+            print(" Best", end='') # so far
+
+        print()
+
+    v = best_v
+    Rover.safe_angle = best_angle
+    fxpix = best_fxpix
+    fypix = best_fypix
+
+    Rover.safe_vel = v # Not clipped -- will be negative for bad options
 
     #
     # ROVER VISION DISPLAY
