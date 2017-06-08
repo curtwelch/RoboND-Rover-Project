@@ -479,6 +479,7 @@ def perception_step(Rover):
 
         Rover.worldmap[wypix_world, wxpix_world, 0] = 0.5
         Rover.worldmap[rypix_world, rxpix_world, 1] = 1
+
         #Rover.worldmap[sypix_world, sxpix_world, 2] = 1
 
         #
@@ -495,6 +496,45 @@ def perception_step(Rover):
         # Rover.worldmap[:, :, 2] = Rover.visit_map[:,:]
         Rover.worldmap[Rover.visit_map[:,:] > 0, 2] = 1
 
+        # Create visit map histogram for debuging
+        # print("nonzero visit map values:", Rover.visit_map[np.nonzero(Rover.visit_map)].flatten().astype(np.int))
+        if 0:
+            hist = np.zeros((20), dtype=np.int)
+            for i in Rover.visit_map[np.nonzero(Rover.visit_map)].flatten().astype(np.int):
+                if i < len(hist):
+                    hist[i] += 1
+            print("hist  is", hist)
+
+        min_value = None;
+        minx = 100
+        miny = 100
+        Rover.min_visit_x = 100
+        Rover.min_visit_y = 100
+
+        for x in range(200):
+            for y in range(200):
+                v = Rover.visit_map[y][x]
+                if v > 10:
+                    if min_value is None or min_value > v:
+                        min_value = v
+                        minx = x
+                        miny = y
+
+        if min_value is not None:
+            Rover.min_visit_x = minx
+            Rover.min_visit_y = miny
+
+        print("Min visit x.y", Rover.min_visit_x, Rover.min_visit_y, "value is", Rover.visit_map[Rover.min_visit_y][Rover.min_visit_x])
+        mx = Rover.min_visit_x
+        my = Rover.min_visit_y
+        for y in range(my+5, my-5, -1):
+            if y < 0 or y > 199:
+                continue
+            for x in range(mx - 5, mx + 5):
+                if x < 0 or x > 199:
+                    continue
+                print("{:4.0f}".format(Rover.visit_map[y][x]), end='')
+            print("")
 
     # Now the ROCKs!
     # We both spot rocks, and remember when we last saw it.  The memory

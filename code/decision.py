@@ -192,8 +192,17 @@ def drive_rover(Rover):
 def decision_drive_PID(Rover):
     # Use PID to control throttle and brake to regulate Rover.vel to Rover.target_vel
 
+    # Hack the PID so we only adjust the sum for high velocieties.  This
+    # is needed to prevent problems caused by the rover getting stuck on rocks
+    # which confuses the PID controller into thinking it needs to use more throttle.
+    # This confusion ends up causing it to drive faster and faster above the top
+    # speed trying to "make up" for a lack of velocity when stuck.
+    # So we stop it from learning about the problem at the slow speed by only adjustig
+    # sum for high speed travel.
+
     err = Rover.target_vel - Rover.vel # Postive error means we need postive throttle (postive P)
-    Rover.throttle_PID_sum += err
+    if Rover.vel > 1.0:
+        Rover.throttle_PID_sum += err
     sum = Rover.throttle_PID_sum
     diff = err - Rover.throttle_PID_err 
     Rover.throttle_PID_err = err # save last err
@@ -213,9 +222,10 @@ def decision_drive_PID(Rover):
 
     Rover.throttle_current = np.clip(throttle, -Rover.throttle_max, Rover.throttle_max)
 
-    print("PID err:{:5.2f}  sum:{:5.2f} dif:{:5.2f}".format(err, sum, diff))
-    print("      P:{:5.2f}    I:{:5.2f}   D:{:5.2f}".format(p*err, i*sum, d*diff))
-    print("      t:{:5.2f} clip:{:5.2f}".format(throttle, Rover.throttle_current))
+    if 1:
+        print("PID err:{:5.2f}  sum:{:5.2f} dif:{:5.2f}".format(err, sum, diff))
+        print("      P:{:5.2f}    I:{:5.2f}   D:{:5.2f}".format(p*err, i*sum, d*diff))
+        print("      t:{:5.2f} clip:{:5.2f}".format(throttle, Rover.throttle_current))
 
     Rover.throttle = np.clip(Rover.throttle_current, 0.0, Rover.throttle_max)
     Rover.brake = np.clip(-Rover.throttle_current, 0.0, Rover.brake_max)

@@ -122,6 +122,12 @@ def create_output_images(Rover):
       map_add[np.int(Rover.pos[1])-rover_size:np.int(Rover.pos[1])+rover_size,
           np.int(Rover.pos[0])-rover_size:np.int(Rover.pos[0])+rover_size, :] = 255 # white rover
 
+      # Plot min_visit location on map
+      rover_size = 4
+      x = Rover.min_visit_x
+      y = Rover.min_visit_y
+      map_add[y-rover_size:y+rover_size, x-rover_size:x+rover_size, :] = 255 # white big min visit
+
       # Calculate some statistics on the map results
       # First get the total number of pixels in the navigable terrain map
       tot_nav_pix = np.float(len((plotmap[:,:,2].nonzero()[0])))
