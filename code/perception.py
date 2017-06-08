@@ -371,12 +371,12 @@ def perception_step(Rover):
         # Rover.vision_image[:,:,1] = wall[:,:] * 255
         # Rover.vision_image[:,:,2] = rock[:,:] * 255
 
-        Rover.vision_image[160-np.int32(sxpix),160-np.int32(sypix),0] = 255
-        Rover.vision_image[160-np.int32(sxpix),160-np.int32(sypix),1] = 0
-        Rover.vision_image[160-np.int32(sxpix),160-np.int32(sypix),2] = 0
+        Rover.vision_image[160-np.int32(sxpix),160-np.int32(sypix)] = (0, 255, 0) # green
+        #Rover.vision_image[160-np.int32(sxpix),160-np.int32(sypix),1] = 0
+        #Rover.vision_image[160-np.int32(sxpix),160-np.int32(sypix),2] = 0
 
-        Rover.vision_image[160-np.int32(fxpix),160-np.int32(fypix),2] = 255
-        Rover.vision_image[160-np.int32(fxpix),160-np.int32(fypix),0] = 0
+        Rover.vision_image[160-np.int32(fxpix),160-np.int32(fypix)] = (0, 0, 255) # Blue
+        #Rover.vision_image[160-np.int32(fxpix),160-np.int32(fypix),0] = 0
 
         # plot target_vel as white bar and vel as blue inside it
 
@@ -648,7 +648,7 @@ def perception_step(Rover):
             a = (Rover.vel - Rover.last_vel) / (Rover.total_time - Rover.last_vel_time)
             if Rover.brake == 0:
                 Rover.min_a_nobrake = min(Rover.min_a_nobrake, a)
-                if a < -10.0: # Call it a collision
+                if a < -8.0: # Call it a collision
                     Rover.stuck_map[int(Rover.pos[1]), int(Rover.pos[0])] += 1
                     Rover.collision = 30
 
