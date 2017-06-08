@@ -73,6 +73,12 @@ class RoverState():
         self.safe_vel = 0 # calculcated safe driving speed (0 when no path forward)
         self.safe_angle = 0 # percpetion 
 
+        self.last_vel = None            # Tracking acceleration to detect collisions
+        self.last_vel_time = None
+        self.min_a_brake = 0.0
+        self.min_a_nobrake = 0.0
+        self.collision = 0              # Display OUCH
+
         # Rock tracking variables
         self.see_rock = False
         self.rock_pixels = 0 # Number of "rock" pixels seen in image
@@ -85,17 +91,22 @@ class RoverState():
         self.rock_xpix_world = 0
         self.rock_ypix_world = 0
 
-        # Visit maps taracks where the rover has been to allow for optimizing serach
-        # +1 for each grid seen as a "good" grid
-        self.visit_map = np.zeros((200, 200), dtype=np.float) # Tracks grid visits
-        self.seen_map = np.zeros((200, 200), dtype=np.float) # Tracks grid visits
-        self.stuck_map = np.zeros((200, 200), dtype=np.float) # Tracks grid places to avoid
-        self.min_visit_x = 100
-        self.min_visit_y = 100
+        # Seen map is my private world map to track what "looks" to be good places to drive.
 
-        # My world map tracks grid squares as wall and sand to help maximize
-        # map accuracy score
-        self.my_world_map = np.zeros((200, 200, 2), dtype=np.float) # Track vists
+        self.seen_map = np.zeros((200, 200), dtype=np.float) # Tracks grid visits
+
+        # Visit map the grids the rover has acutally driven on.  It's the ground truth
+        # version of our belifs about where we can drive.
+
+        self.visit_map = np.zeros((200, 200), dtype=np.float) # Tracks grid visits
+
+        # Stuck map is a count of the times stuck at different grid locations.  We
+        # Avoid these.
+
+        self.stuck_map = np.zeros((200, 200), dtype=np.float) # Tracks grid places to avoid
+
+        self.min_visit_x = 100 # experimental but not used currently 
+        self.min_visit_y = 100
 
         #
         # Decision control

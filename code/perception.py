@@ -185,6 +185,7 @@ def perception_step(Rover):
     # Set a bottom offset to account for the fact that the bottom of the image 
     # is not the position of the rover but a bit in front of it
     # this is just a rough guess, feel free to change it!
+
     bottom_offset = 6
     source = np.float32([[14, 140], [301 ,140],[200, 96], [118, 96]])
     destination = np.float32([[Rover.img.shape[1]/2 - dst_size, Rover.img.shape[0] - bottom_offset],
@@ -403,13 +404,18 @@ def perception_step(Rover):
 
         if Rover.mode == 'stuck':
             cv2.putText(Rover.vision_image, "ESCAPE", (190, 150),
-                      cv2.FONT_HERSHEY_SIMPLEX, 1.0, fontcolor, 1)
-        
+                      cv2.FONT_HERSHEY_SIMPLEX, 1.0, fontcolor, 2)
+
+        if Rover.collision > 0:
+            cv2.putText(Rover.vision_image, "OUCH", (20, 150),
+                      cv2.FONT_HERSHEY_SIMPLEX, 3.0, fontcolor, 4)
+            Rover.collision -= 1.0
+
         # ROCK message and square
 
         if Rover.saw_rock:
             cv2.putText(Rover.vision_image, "ROCK", (10, 150), 
-                      cv2.FONT_HERSHEY_SIMPLEX, 1.0, fontcolor, 1)
+                      cv2.FONT_HERSHEY_SIMPLEX, 1.0, fontcolor, 2)
 
         if Rover.saw_rock:
             # Draw a yellow square where we think the rock is
@@ -631,6 +637,32 @@ def perception_step(Rover):
         # The call to update_rock() will set the rest
 
     Rover.update_rock() # only does sommething if we are in rock_saw mode
+
+    #
+    # Collision detection
+    #
+
+    if Rover.last_vel is not None and Rover.mode == "forward" and Rover.last_vel > 1.0:
+        dt = (Rover.total_time - Rover.last_vel_time)
+        if dt > 0:
+            a = (Rover.vel - Rover.last_vel) / (Rover.total_time - Rover.last_vel_time)
+            if Rover.brake == 0:
+                Rover.min_a_nobrake = min(Rover.min_a_nobrake, a)
+                if a < -10.0: # Call it a collision
+                    Rover.stuck_map[int(Rover.pos[1]), int(Rover.pos[0])] += 1
+                    Rover.collision = 30
+
+            else:
+                Rover.min_a_brake = min(Rover.min_a_brake, a)
+
+            print("Acceleration is {:6.2f} b:{:1.0f} max brake {:6.2f} max no brake {:6.2f}". \
+                format(a, Rover.brake, Rover.min_a_brake, Rover.min_a_nobrake))
+            print("dt is {:8.4f}".format(dt))
+
+
+
+    Rover.last_vel = Rover.vel
+    Rover.last_vel_time = Rover.total_time
 
     #
     # Status output to tty
