@@ -7,6 +7,9 @@ import time
 def decision_set_stuck(Rover, forward=False):
     # Oh crap -- try something random for a random bit of time
 
+    # Remember to avoid this place in the future
+    Rover.stuck_map[int(Rover.pos[1]), int(Rover.pos[0])] += 1
+
     Rover.mode = 'stuck'
 
     Rover.stuck_cnt = 0
@@ -222,10 +225,11 @@ def decision_drive_PID(Rover):
 
     Rover.throttle_current = np.clip(throttle, -Rover.throttle_max, Rover.throttle_max)
 
-    if 1:
+    if 0:
         print("PID err:{:5.2f}  sum:{:5.2f} dif:{:5.2f}".format(err, sum, diff))
         print("      P:{:5.2f}    I:{:5.2f}   D:{:5.2f}".format(p*err, i*sum, d*diff))
         print("      t:{:5.2f} clip:{:5.2f}".format(throttle, Rover.throttle_current))
+    print("PID Sum is {:5.2f}".format(sum))
 
     Rover.throttle = np.clip(Rover.throttle_current, 0.0, Rover.throttle_max)
     Rover.brake = np.clip(-Rover.throttle_current, 0.0, Rover.brake_max)

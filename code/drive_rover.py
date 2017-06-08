@@ -89,6 +89,7 @@ class RoverState():
         # +1 for each grid seen as a "good" grid
         self.visit_map = np.zeros((200, 200), dtype=np.float) # Tracks grid visits
         self.seen_map = np.zeros((200, 200), dtype=np.float) # Tracks grid visits
+        self.stuck_map = np.zeros((200, 200), dtype=np.float) # Tracks grid places to avoid
         self.min_visit_x = 100
         self.min_visit_y = 100
 

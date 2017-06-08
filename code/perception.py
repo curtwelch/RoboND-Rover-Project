@@ -62,14 +62,6 @@ def trim_coords(x_pixel, y_pixel, distance):
     x_pixel = np.float32([x for (y, x) in yx])
     return x_pixel, y_pixel
 
-def thin_coords(x_pixel, y_pixel, percent=0.50):
-    n = 0.0
-    yx = [(y, x) for (y, x) in zip(y_pixel, x_pixel) if (float(x)*float(y)) % 10.0 > percent * 10.0 ]
-    y_pixel = np.float32([y for (y, x) in yx])
-    x_pixel = np.float32([x for (y, x) in yx])
-    return x_pixel, y_pixel
-        
-
 # Convert to radial coords in the rover space
 def to_polar_coords(x_pixel, y_pixel):
     # Convert (x_pixel, y_pixel) to (distance, angle) 
@@ -229,11 +221,6 @@ def perception_step(Rover):
     # Sand (or snow?) safe driving pixels
     sxpix, sypix = rover_coords(sand)
 
-    # Thin the list by randomly thowing pixels away.
-    # n = len(sxpix)
-    # sxpix, sypix = thin_coords(sxpix, sypix, percent=.50)
-    # print("Before thin sand pix are", n, "after they are", len(sxpix))
-
     sxpixt, sypixt = trim_coords(sxpix, sypix, 50)
 
     # Rock pixels
@@ -242,6 +229,28 @@ def perception_step(Rover):
     # Wall pixels
     wxpix, wypix = rover_coords(wall)
     wxpix, wypix = trim_coords(wxpix, wypix, 80)
+
+    #
+    #
+    # Remove "stuck" locations from list of good ground "sand" pixels using
+    # The stuck_map[] we update every time we get stuck.
+    # Must calculate world grid locations first.  Then remove every pixel
+    # that matches a "stuck" grid location.
+    #
+
+    world_size = 200
+    world_scale = 10.0    # 10 warpped pixes per one world map pixel
+
+    sxpix_world, sypix_world = pix_to_world(sxpix, sypix, Rover.pos[0],
+                                          Rover.pos[1], Rover.yaw, world_size, world_scale)
+
+    xylist  = [xy for xy in zip(sxpix, sypix, sxpix_world, sypix_world) \
+                        if Rover.stuck_map[xy[3],xy[2]] == 0]
+
+    sxpix = np.array([xy[0] for xy in xylist])
+    sypix = np.array([xy[1] for xy in xylist])
+    sxpix_world = np.array([xy[2] for xy in xylist])
+    sxpiy_world = np.array([xy[2] for xy in xylist])
 
     #
     # Convert sand pixels to polar
@@ -463,8 +472,11 @@ def perception_step(Rover):
         (Rover.roll < var or Rover.roll > 360.0-var):
 
 
+        # Did this above, but with the full list, not the trim list, so we must
+        # do it agagin....
         sxpix_world, sypix_world = pix_to_world(sxpixt, sypixt, Rover.pos[0],
                                               Rover.pos[1], Rover.yaw, world_size, world_scale)
+
         rxpix_world, rypix_world = pix_to_world(rxpix, rypix, Rover.pos[0],
                                               Rover.pos[1], Rover.yaw, world_size, world_scale)
         wxpix_world, wypix_world = pix_to_world(wxpix, wypix, Rover.pos[0],
@@ -540,11 +552,14 @@ def perception_step(Rover):
             for x in range(mx - 5, mx + 5):
                 if x < 0 or x > 199:
                     continue
-                
-                v = "{:4.0f}".format(Rover.visit_map[y][x])
-                if v == "   0":
-                    v = "   ."
-                print(v, end='')
+                if Rover.stuck_map[y][x] > 0:
+                    v = -Rover.stuck_map[y][x]
+                else:
+                    v = Rover.visit_map[y][x]
+                if v == 0.0:
+                    print("   .", end='')
+                else:
+                    print("{:4.0f}".format(v), end='')
             print("")
 
     # Now the ROCKs!
