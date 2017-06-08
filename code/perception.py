@@ -483,18 +483,23 @@ def perception_step(Rover):
         #Rover.worldmap[sypix_world, sxpix_world, 2] = 1
 
         #
-        # Update visit map te tell us where we have been.  Used to help motivate seraching
+        # Update seen map te tell us what grid cells we belive to be good to drive on.
+        # Update the visit map to tell us where the rover has actually gone.
+        #
+        # .  Used to help motivate seraching
         # of the entire map.  Marks cells we have "seen" as good driving locations.
         #
 
-        this_visit =  np.zeros((200, 200, 2), dtype=np.int)
-        this_visit[wypix_world, wxpix_world, 0] += 1    # Count bad wall pixels per world grid
-        this_visit[sypix_world, sxpix_world, 1] += 1    # Count good sand pixels per world grid
+        this_seen =  np.zeros((200, 200, 2), dtype=np.int)
+        this_seen[wypix_world, wxpix_world, 0] += 1    # Count bad wall pixels per world grid
+        this_seen[sypix_world, sxpix_world, 1] += 1    # Count good sand pixels per world grid
         # good pixels for this frame are the ones where sand > wall
-        good_ground_map = this_visit[:,:,1] > this_visit[:,:,0]
-        Rover.visit_map[good_ground_map] += 1.0      # Count the times we have seen good world grid squares
-        # Rover.worldmap[:, :, 2] = Rover.visit_map[:,:]
-        Rover.worldmap[Rover.visit_map[:,:] > 0, 2] = 1
+        good_ground_map = this_seen[:,:,1] > this_seen[:,:,0]
+        Rover.seen_map[good_ground_map] += 1.0      # Count the times we have seen good world grid squares
+        # Rover.worldmap[:, :, 2] = Rover.seen_map[:,:]
+        Rover.worldmap[Rover.seen_map[:,:] > 0, 2] = 1
+
+        Rover.visit_map[int(Rover.pos[1]), int(Rover.pos[0])] += 1
 
         # Create visit map histogram for debuging
         # print("nonzero visit map values:", Rover.visit_map[np.nonzero(Rover.visit_map)].flatten().astype(np.int))
@@ -527,13 +532,19 @@ def perception_step(Rover):
         print("Min visit x.y", Rover.min_visit_x, Rover.min_visit_y, "value is", Rover.visit_map[Rover.min_visit_y][Rover.min_visit_x])
         mx = Rover.min_visit_x
         my = Rover.min_visit_y
+        mx = int(Rover.pos[0])
+        my = int(Rover.pos[1])
         for y in range(my+5, my-5, -1):
             if y < 0 or y > 199:
                 continue
             for x in range(mx - 5, mx + 5):
                 if x < 0 or x > 199:
                     continue
-                print("{:4.0f}".format(Rover.visit_map[y][x]), end='')
+                
+                v = "{:4.0f}".format(Rover.visit_map[y][x])
+                if v == "   0":
+                    v = "   ."
+                print(v, end='')
             print("")
 
     # Now the ROCKs!

@@ -88,6 +88,7 @@ class RoverState():
         # Visit maps taracks where the rover has been to allow for optimizing serach
         # +1 for each grid seen as a "good" grid
         self.visit_map = np.zeros((200, 200), dtype=np.float) # Tracks grid visits
+        self.seen_map = np.zeros((200, 200), dtype=np.float) # Tracks grid visits
         self.min_visit_x = 100
         self.min_visit_y = 100
 
