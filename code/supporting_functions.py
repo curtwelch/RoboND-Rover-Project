@@ -115,7 +115,12 @@ def create_output_images(Rover):
                   # sample on the map
                   if np.min(rock_sample_dists) < 3:
                         map_add[test_rock_y-rock_size:test_rock_y+rock_size, 
-                        test_rock_x-rock_size:test_rock_x+rock_size, :] = 255
+                        test_rock_x-rock_size:test_rock_x+rock_size,0:2] = 240 # dark yellow rock
+
+      # Plot rover location on map
+      rover_size = 2
+      map_add[np.int(Rover.pos[1])-rover_size:np.int(Rover.pos[1])+rover_size,
+          np.int(Rover.pos[0])-rover_size:np.int(Rover.pos[0])+rover_size, :] = 255 # white rover
 
       # Calculate some statistics on the map results
       # First get the total number of pixels in the navigable terrain map

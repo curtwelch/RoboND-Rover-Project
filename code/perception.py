@@ -313,11 +313,10 @@ def perception_step(Rover):
         # of finding rocks that are hard to see
 
         max_vel = Rover.max_vel
-        if Rover.total_time is not None:
+        if 0 and Rover.total_time is not None: # experiment
             # Reduce 10% per minute down to v of 2.5
             max_vel = np.clip(Rover.max_vel * 1.0 - (Rover.total_time * 0.10 / 60.0), 2.5, Rover.max_vel)
-
-        print("Time is", Rover.total_time, " current max vel is", max_vel)
+            # print("Time is", Rover.total_time, " current max vel is", max_vel)
 
         zero_per = 20.0 / safe_zone_depth
         zero_pixel_cnt_point = MaxSafePixelCnt * zero_per
@@ -326,7 +325,7 @@ def perception_step(Rover):
 
         v = (max_vel * (safe_pixel_cnt - zero_pixel_cnt_point)) / (MaxSafePixelCnt - zero_pixel_cnt_point)
 
-        print("Check path for angle {:5.1f} v is {:6.1f}".format(angle, v), end='')
+        # print("Check path for angle {:5.1f} v is {:6.1f}".format(angle, v), end='')
 
         #if best_angle is None or v > best_v or angle == 0 and v == best_v:
             # pick angle 0 -- straight ahead on tie for best
@@ -339,9 +338,9 @@ def perception_step(Rover):
             largest_v = max(largest_v, v)
             best_fxpix = fxpix
             best_fypix = fypix
-            print(" Best", end='') # so far
+            # print(" Best", end='') # so far
 
-        print()
+        # print()
 
     v = best_v
     Rover.safe_angle = best_angle
@@ -387,14 +386,22 @@ def perception_step(Rover):
         Rover.vision_image[18:18+5,160-l:160] = (255, 0, 0)
 
 
+        flash = int(time.time()*4.0) % 4
+        if flash in (1, 3):
+            fontcolor = (0,0,0)
+        else:
+            fontcolor = (255,255,255)
+
+        if Rover.mode == 'stuck':
+            cv2.putText(Rover.vision_image, "ESCAPE", (190, 150),
+                      cv2.FONT_HERSHEY_SIMPLEX, 1.0, fontcolor, 1)
+        
         # ROCK message and square
 
-        flash = int(time.time()*4.0) % 4 == 0
-
-        if Rover.saw_rock and flash:
+        if Rover.saw_rock:
             cv2.putText(Rover.vision_image, "ROCK", (10, 150), 
-                      cv2.FONT_HERSHEY_COMPLEX, 0.8, (0, 0, 0), 1)
-            
+                      cv2.FONT_HERSHEY_SIMPLEX, 1.0, fontcolor, 1)
+
         if Rover.saw_rock:
             # Draw a yellow square where we think the rock is
             Rover.update_rock()
@@ -447,7 +454,7 @@ def perception_step(Rover):
     # large pich errors than roll errors.
 
     var = 2         # deg variance for trusting image data since we don't adjust for
-                    # pitch or roll
+                    # roll (but do now adjust for pitch)
 
     world_size = 200
     world_scale = 10.0    # 10 warpped pixes per one world map pixel
@@ -470,11 +477,23 @@ def perception_step(Rover):
         # Update World map from pixel data
         #
 
-        Rover.worldmap[wypix_world, wxpix_world, 0] = 1
+        Rover.worldmap[wypix_world, wxpix_world, 0] = 0.5
         Rover.worldmap[rypix_world, rxpix_world, 1] = 1
-        Rover.worldmap[sypix_world, sxpix_world, 2] = 1
+        #Rover.worldmap[sypix_world, sxpix_world, 2] = 1
 
+        #
+        # Update visit map te tell us where we have been.  Used to help motivate seraching
+        # of the entire map.  Marks cells we have "seen" as good driving locations.
+        #
 
+        this_visit =  np.zeros((200, 200, 2), dtype=np.int)
+        this_visit[wypix_world, wxpix_world, 0] += 1    # Count bad wall pixels per world grid
+        this_visit[sypix_world, sxpix_world, 1] += 1    # Count good sand pixels per world grid
+        # good pixels for this frame are the ones where sand > wall
+        good_ground_map = this_visit[:,:,1] > this_visit[:,:,0]
+        Rover.visit_map[good_ground_map] += 1.0      # Count the times we have seen good world grid squares
+        # Rover.worldmap[:, :, 2] = Rover.visit_map[:,:]
+        Rover.worldmap[Rover.visit_map[:,:] > 0, 2] = 1
 
 
     # Now the ROCKs!

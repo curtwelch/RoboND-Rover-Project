@@ -68,8 +68,8 @@ class RoverState():
         # Must have max_vel less than the max of the simulator so
         # the over can go over the max and we learn to throttle back.
         # Simulator max is 5.0, so we set our target speed to 4.0
+
         self.max_vel = 4.0 # Maximum velocity (meters/second) that perception will recommend
-        self.max_vel = 4.5 # Try 4.5 again...
         self.safe_vel = 0 # calculcated safe driving speed (0 when no path forward)
         self.safe_angle = 0 # percpetion 
 
@@ -85,7 +85,13 @@ class RoverState():
         self.rock_xpix_world = 0
         self.rock_ypix_world = 0
 
-        self.visit_map = np.zeros((200, 200, 1), dtype=np.int) # Track vists
+        # Visit maps taracks where the rover has been to allow for optimizing serach
+        # +1 for each grid seen as a "good" grid
+        self.visit_map = np.zeros((200, 200), dtype=np.float) # Tracks grid visits
+
+        # My world map tracks grid squares as wall and sand to help maximize
+        # map accuracy score
+        self.my_world_map = np.zeros((200, 200, 2), dtype=np.float) # Track vists
 
         #
         # Decision control
