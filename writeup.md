@@ -8,36 +8,46 @@
 ## [Rubric](https://review.udacity.com/#!/rubrics/916/view) Points 
 
 ---
-### Writeup / README
+### Rubric 1: Writeup / README
 
-#### 1. Provide a Writeup -- Yes, here it is!
+#### My Writeup -- Yes, here it is!
 
-I'm runing a bit behind.  I hope to catch up.  I wasn't able to start this projet until the due date last Wednesday and I've been putting in 12 hours day for the last week having great fun with this project. I've done a bit more than the project required. (that's an understatement).
+I'm runing a bit behind.  I hope to catch up.  I wasn't able to start this projet until the due date last Wednesday and I've been putting in 12 hours day for the last week having great fun with this project. I've done a bit more than the project required.
 
-### Notebook Analysis
+My submited project can be found in the project_1 branch of my reposity (not the main branch).
 
-I'm not going to describe what I did with the notebook. At this point, I honeastly don't remember. It was 100's of hours of work in the past...  I hope that's ok. I'll skip straight to the describing my code as it exists now.
+https://github.com/curtwelch/RoboND-Rover-Project/tree/project_1
 
-#### 1. color selection of obstacles and rock samples.
+### Rubric 2: Notebook Analysis
 
-Rock selection I did by writting yellow_thresh() which checks for yellow collors.  Since Yellow is (255, 255, 0), my function is almost identical to the ground selection, except for the blue value, it checks for values LESS THAN the given parameter. I spend hours twiking the values of the threshold numbers, but the last numbers I used are (90, 90, 60).  So all pixels with R and G above 90, and B below 60 are considered to be potential Rock pixels.  I've only seen one falase positive in this virtural world using this approach -- and it's only sporadic so it doesn't cause the rover to lock onto a location looking for a rock that isn't there.  This virtual world is very yellow-free except for the rocks.
+I don't remember much of what I did in the notebook.  I've spent over 100 hours modifying and tuning the actual code.  I hope that's ok. I'll focus on describing my code as it exists now.
+
+I did use the notebook for various phases of testing and my heavily modified notebook is in the repository to look at but it's not clean or documented what I was experimenting with.
+
+My notebook is here:
+
+https://github.com/curtwelch/RoboND-Rover-Project/blob/project_1/code/Rover_Project_Test_Notebook.ipynb
+
+#### Rubric 2a: Color selection of obstacles and rock samples.
+
+Rock selection I did by writting yellow_thresh() which checks for yellow collors.  Since Yellow is (255, 255, 0), my function is almost identical to the ground selection, except for the blue value, it checks for values LESS THAN the given Blue parameter. I spent hours twiking the values of the threshold numbers, but the last numbers I used are (90, 90, 60).  So all pixels with R and G above 90, and B below 60 are considered to be Rock pixels.  I've only seen one falase positive in this virtural world using this approach -- and it's only sporadic so it doesn't cause the rover to lock onto a location looking for a rock that isn't there.  This virtual world is very yellow-free except for the rocks which makes detection very easy.
 
 Obsticals are everything that is not ground or rock.
 
-I tried MANY different values for the ground selection thresholds. But in the end, I just went back to the suggested (160, 160, 160) values. The simulation has different colors depending on what time of day and where the sun is in the simulation and though 160 seems too dark for many test runs, some of the "darker days" in the simualtion need the lower values.
+I tried MANY different values for the ground selection thresholds. But in the end, I just went back to the suggested (160, 160, 160) values. The simulation has different colors depending on what time of day and where the sun is in the simulation and though 160 seems too dark for many test runs, some of the "darker days" in the simualtion need the lower values.  In fact, if  were to go back and experiment more, I'd likely set it even lower now due to my rover's ability to cope well with driving into dangerous areas and to remember to avoid bad places in the future.
 
-#### 1. Populate the `process_image()` function with the appropriate analysis steps to map pixels identifying navigable terrain, obstacles and rock samples into a worldmap.  Run `process_image()` on your test data using the `moviepy` functions provided to create video output of your result. 
+#### Rubric 2b: Populate the `process_image()` function with the appropriate analysis steps to map pixels identifying navigable terrain, obstacles and rock samples into a worldmap.  Run `process_image()` on your test data using the `moviepy` functions provided to create video output of your result. 
 
-Ok, I played with that. But it has little to do with what's in my current code.  Here's the mp4 that I was playing with..
+Yes I did all that, and then a lot more in my actual code. Here's the mp4 that I created:
 
-[output/test_mapping.mp4](output/test_mapping.mp4)
+[test_mapping.mp4](https://github.com/curtwelch/RoboND-Rover-Project/blob/project_1/output/test_mapping.mp4)
 
 
-### Autonomous Navigation and Mapping
+### Rubric 3: Autonomous Navigation and Mapping
 
-#### 1. Fill in the `perception_step()` (at the bottom of the `perception.py` script) and `decision_step()` (in `decision.py`) functions in the autonomous mapping scripts and an explanation is provided in the writeup of how and why these functions were modified as they were.
+#### Rubric 3a: Fill in the `perception_step()` (at the bottom of the `perception.py` script) and `decision_step()` (in `decision.py`) functions in the autonomous mapping scripts and an explanation is provided in the writeup of how and why these functions were modified as they were.
 
-I wrote a LOT of code and threw away 10 times as much as I kept as I explored many different algoirthms for controlling the rover.  So much fun I've found it hard to stop playing with it and move on to the rest of the course.  I'll just descibe the version I've submitted here.
+I wrote a LOT of code and threw away 10 times as much as I kept as I explored many different algoirthms for controlling the rover.  It's been so much fun I've found it hard to stop playing with it and move on to the rest of the course.  I'll just descibe the version I've submitted here.
 
 My current version is genrally able to reach over 80% accuracy on map fidelity and and percent mapped.  Though the longer it runs, the more "edge" pixels get added with ups the Mapped percent and lowers the Fidelity any time one of the pixels my code considers part of the map falls outside of the reference ground truth map used for scoring.  My code is always able to make the entire area.
 
@@ -49,9 +59,9 @@ The rover runs at around 4 m/s in serahing so it's much faster than how it was c
 
 So lets me overview the major features of the code...
 
-### Perception
+#### Perception
 
-### Image Warp Translation
+##### Image Warp Translation
 
 I used the provided perspect_transform() transform and the provided srouce and destination reference values.  I had as the notebook suggested entered my own values from the test data, but I deided to just use the one provided in the example code.
 
@@ -63,7 +73,7 @@ I think the current code still refuses to update the world map from the image da
 
 To improve world map data updates, I also limited which pixels were used.  Pixels near the horizon (the middle of the screen) are VERY inacurate in their estimated world map locations. Pixels near the rover are very accurate.  So I wrote a trim_cords() to filter out the more distant pixels.  For the ground pixels (which I call "sand" in the code -- but later relaised this was probbaly "snow" and not sand in the virual world), I trimmed anything more than 50 pixels away from the "rover" in the map coordiages (which translates to anything more than 5 meters out in front of the rover).  This improves my maping accuracy.
 
-### Navagation Data
+##### Navagation Data
 
 I used all the "sand" pixels to assist in driving, not the "timmed" set I used for world map updates.
 
@@ -77,7 +87,7 @@ For every image, multiple paths ahead are checked with this "slanted" path ahead
 
 The basic idea is to pick the path with the highest estimated "safe driving" speed.  But more compolexity I'll explain below. But the simple idea, is that the best path forward in this way is passed to the "driving" decision code.
 
-### Map updates
+##### Map updates
 
 My code maintains multiple maps separate from the "worldmap" used for the accuracy grading and the screen display. I choose not to modify how the worldmap worked, since it was related to the "scoring" of this project.  So I added additional maps to help my rover.
 
@@ -87,7 +97,7 @@ Then, I identifhy the "good" grid locations.  I map all sand and "not sand" pixe
 
 This turst is placed in the sand in this world beause the sand is always flat. So when we "see" sand in an image, our understanding of where it is in the 2D flat world is accurate. When we see a rock, we have no valid understnding of where it is in the 2D map world (it's shadow falls behind it, so our map understanding plaes it far way from where the "warpped" image tells us it is). So we must trust sand pixels, and distrust evetything else.  So I update the "untrusted" dirt pixels first, and overrite with the good sand pixel data I trust to get a high world map accuracy.
 
-### The Visit and Stuck Maps
+##### The Visit and Stuck Maps
 
 For advanced naigation use, I track two other maps as well. I track every grid the rover has DRIVEN on. This is the "visit" map.  Every image update that is processed I increment the grid location the rover is currently on (Rover.pos).  This creates a ground truth map that has been verified by the fact the rover could get to it.  And it tracks how many times the rover has been seen at each grid.
 
@@ -95,6 +105,7 @@ In the same sense, I also track a "stuck" map. The rover has the ability to dete
 
 As currently configured, my software is printing a small section of the Visit and Stuck maps to the tty output as it runs. It prints an 11x11 section of the large 200x200 map around the current location of the rover. Negative numbers are from the "stiuck" map and postive numbers from the Vist map.  Here's some output as it was stuck on that low rock in the middle of the map (the -8).  Note that multiple grids in that rock area has been marked as "do not vist" (negative numbers).
 
+```
 Visit count MAP (near rover) used to force explore
   11  63  -4 136  28  37  36  43  66  32  51
   87  38   3  25  29  36  60  46  36  33  44
@@ -107,14 +118,13 @@ Visit count MAP (near rover) used to force explore
   41  20  17  -1   .   3  14  28  51  52  47
   84  62  57  22  38  17   6  -1  39  82  46
   15  27  80  65  49  34  56  -3  38  90  54
+```
 
-### More Percpetion
-
-#### Collision Detection
+##### Collision Detection
 
 The code detects collisions as high values of negative acceleration without the brake on.  This allows it to understand when it runs into a rock.  It will display "OUCH" on the scrreen wshen this happens, and increment the "stuck" map, to mark the fact it should aviod that grid from now on.  We see in the data bove, the rover has marked 8 grid location in "rock valley" to avoid.  Even whem marked to avoid them, it still at times will hit them.
 
-#### Path Selection
+##### Path Selection
 
 In addition to looking for the best clear path forward, the path selection logic is also free to make higher level decisions when it sees multiple good paths forward.  It does two things with these higher level choices to help the rover reach it's goal of mapping the whole world, and finding all the rocks.
 
@@ -128,7 +138,7 @@ So when it starts out, it will follow the edge using the left hand rule. But wit
 
 The other reason for using the "left haned" rule is sort of cheating. That one rock, is hidden behidn to large bolders. And if you come across it by following the left hand wall, the rover will drive up behind the bolders and grap it. if the rover instead first spots that rock from the other side, between the two rocks, the rover will drive straight to it, and get suck and not reach it. The robver will unstick istelf, and move on, but if it were doing a right hand rule, it will just keep coming apon the rock from the wrong direction and maybe never get it.  Using the left hand rule makes it more likely the rover will quickly find, and nab, that hard to get rock -- without having to write any path planing code for the rover when it's picking up rocks.
 
-### Rover Vision Screen
+##### Rover Vision Screen
 
 The rover vision data shown on the screen has multiple things being displayed on it. But it includes the spread of "safe" "sand" pixels (in green), as well as the "path ahead" box in blue.  So you can watch as the code is picking different paths ahead.  There is no implicit display of obstical pixels. Anything that is not "safe" is undersood as "not safe".
 
@@ -148,7 +158,7 @@ The angle of the blue tapozoid box of the "best path" code, is basically what th
 
 In fact however I set the steeting to HALF of the path ahead value.  Setting the same value creates an oversteering and oscillation effect.  Setting it to half, solves that.
 
-### Rocks
+##### Rocks
 
 The code will remember where it saw a rock for something like 4 seconds.  So if it only gets a quick glimpse, it will stay on the screen for 4 seconds, and the rover will try to go to that location.  This could ccreate issue is the world had lots of flse postives, but sine the world has almst none, we can trust that when we see yellow, it's a rock, and we can remember where se sw it, and try to go get it.
 
@@ -160,7 +170,7 @@ But with this 4 second focuse window, the rover will likely get close to the roc
 
 I have no code to catch such a loop, so if it did get stuck in such a loop looking at two rocks, my rover woud not free itself from that loop.
 
-## Decision Code
+#### Decision Code
 
 All the above description, was basically percpetion logic.  The perception code identifies the best paths, and speed, and where it belives rocks are.  But in it's high level choice of paths, it's creating the high level decision behavior that guides the rover in it's travel though the enviroment.
 
@@ -176,7 +186,7 @@ Spin looks for a rock, or a good path forward, and takes it when it finds it. If
 
 Forward and spin states both have logic to detect when they are stuck and switch to the stuck state. The stuck state, is not smart at all. It just trys a random move with random high throttle (up to 50 I thinnk) that can be a spin, or forward or revese move, in a random direction, of random steering, for a random time. Then it tries to use forward or spin to drive away. If it's still stuck, they will detect it, and reutrn to "stuck" state to try someyhing else random. it's not a fast escape, but it always seems to get itself free in this simple (and mostly safe) virtual world.
 
-## PID for throttle and brake.
+##### PID for throttle and brake.
 
 I went through 3 different rewrites of the throttle and break controls and ended up with a straight forward PID to control both to regualte speed to the value set by the reset of the code.
 
@@ -188,33 +198,49 @@ There was an issue with the I term of the PID howeger. The I terms maintains a s
 
 One solution, was to just not use the I term (set it to zero, and must make it a PD conttoller).  But then it would contantly run under speed.  That could work, and I could just up the maximum speed configued in the system to compensate to get it running at the speed I wanted.  But I took a different path, and simply made it update the sum for the PID only when it was goihg over something like 2 m/s.  So only data from fast speeds were being used to adjust the I term (when I knew the rover and throttle were opperating consistantly so the PID could learn to best control the speed under the "good drivig" conditions.
 
-### Rock Grabbing
+##### Rock Grabbing
 
 The logic is simple for this. Drive straight to the rock, and try to pick it up.  There is no path planning, no map use, and no use made of the percpetion system's "best path" information. The rover just turns to the rock and drives straight towards it, even if it's on the other side of a pile of rocks.  This means it will sometimes get stuck and not reach the rock. But the "stuck" mode will always free it.  The side effect of the random stuck mode behavior, is that either it makes the rover forget about the rock, or it sometimes puts the rover in the perfect place to pick it up, all by accident.
 
 This works only because this world is "safe" and no "show stopping" danger exists.  But for this enviromewnt, it seems to be all the logic that is needed to solve this problem.
 
-## What couild be improved
+#### Rubric 3b: Run the code, results, and future improvements
 
-Well, not a lot.  The code seems to pretty much solve this problem as defined to a level that strikes me as resonabe enough to not worry about better solutions uinless a different goal was really the pupose (like the NASA challenge hat I've not looked at yet).
+#### Results
 
-The mapping is fairly accurate. The difference between my maps and the reference "ground truth" is not a matter of fact, it's a matter of oppinion as to which of the "edge" or obsticle pixels should be counted as part of the "ground".  I could play games to make the map more accuately match the ground truth map used for scoring and end up with a 100% 100% score if I wanted to invest the time to do that, but there's not much point to that.
+Results were a Fideltiy and percent mapped that quickly reaches about 90/90.  But the longer it runs, the map complete percept will advance to over 98% while the Fidellity falls to about 75% (after 12 hours or so at this point).  This is due to my mapping code adding edge pixels that are not on the ground truth reference map used for scoring. It's all about the edge pixels.
 
-There is much room to clean up my code. It's a mess from a heavy week of constant rewritting and hacking to make it all work.
+For most random startging postions, my rover will find and pick up all 6 rocks.
 
-There are plenty of other algoirthms to have fun exploring to solve this sort of problem.  I could add high level path planing whcih would make the rover more agressively and systematidaly serah the entire are for more rocks, or to try and find new "hidden" path to a different part of the world (such as by trying on purpsoe to drive the rover into every wall and corner of the map at high speed to see what happens -- could make sense for a video game -- not so much for the real world...
+#### Future improvements
 
-There is plenty of room for upgrading the vision understnding of the envioment. This appraoh uses a cheap trick to map pixels to a groud map that only works for flat land -- something that happens to be true in this game. But the overhangig rocks in the middle of the map that allow the low to ground camara to see under, but not drive under, tricks this approach. Turnign pixel data into a better 3D uneersteanding would be usefl -- but I don't know how much processing power that would take or what the results might be.
+I have kept improving the code to the point that it mostly solves this challenge so there's not a lot that "needs" improving. But yet, I could easilly spend anther 6 months tweaking and exploring alternative ideas.
 
-In genral, this probem is easy, becuase the simuator elimanates the need to solve the localization problem. It tells you eaclty where you are, and which direcgtion you are pointed.  This makes mapping easy. But we could choose to not use that "free" data, and try to solve the problem without it.  That becomes much harder because it requires the rover to try and solve both the mapping and localizagi problems.
+The mapping is fairly accurate. The score is just an issue of what the ground truth cosiders an edge pixel so though I could work to make it match the ground truth scoring map closer, there is not much point to that -- it would not improve the basic map and retreive mission of the "game".
 
-There is endless fun idea to play with here, but not much else "needed" since this code mostly solves the problem as given. It would me more of trying to explore other ways to solve it than adding something that was obvlisly "missing".
+There is much room to clean up my code. It's a mess from a heavy week of constant rewritting and hacking to make it all work.  Performance could easilly be improved with more optimisig. I had it running as fast as 45 FPS but the current code is a bit clareless in it's CPU use and has fallen to 15 FPS range.
 
-Curt Welch
+The low level driving code is tuned very nicely. Though I could try to push it to work well at slightly faster speeds (mine drives at around 4 m/s now, but the simulator allows up to 5).  The PID needs to be able to go over the target value as it opreates so you can't run the PID at 5 m/s or it will mess up the I SUM value.  So it must use a target value a bit below 5.
+
+The current algorithm jerks the steering all over the place as it very intentionally trys to hit every low value map square.  Due to the fact the simulator works fine jerking the steering around, I didn't change this.  In a real life rover, such irraedic steering would be dangertous and harmful to the robot, not to mention wasting energy (drain batteries etc). In the simulatore, these real life issues are not important, but it does make me nausus to watch the screen for too long as it jerks around, so I _could_ add simple damping to the logic to make it act more like a smooth real-life robot.  That would only be an ethetics change however.
+
+The current code is producing a highly laccurate ground truth map in the Vists map of everywhere the rover drivesm but it's not making any sue of that map to help navigate.  After the Vists map gets filled in, it could stop using the visual data all together (since the world is static and doesn't change), and switch to a mode of exploring all the edges.  That would fill out the truth of where the rover is acutally able to drive, as well as force the finding of thsoe two very hard to find rocks.
+
+The Vists map could be used to perform route planing for picking up rocks as well -- so it would know to drive around an obistical instead of through them.
+
+There is plenty of room for upgrading the vision understnding of the envioment. This aproacoh uses a cheap trick to map pixels to a groud map that only works for flat land -- something that happens to be true in this game. But the overhangig rocks in the middle of the map that allow the low to ground camara to see under, but not drive under, tricks this approach. Turning pixel data into a better 3D understeanding would be useful and something to be explored.
+
+In genral, this probem is easy, becuase the simulator eliminates the need to solve the localization problem. It tells you eaclty where you are, and which direction you are pointed.  This makes mapping and navigation easy. But we could choose to not use that "free" data, and try to solve the problem without it.  That becomes much harder because it requires the rover to try and solve both the mapping and localization problems.  But it would be something to explore in this project.
+
+There is endless fun idea to play with here, but not much else "needed" since this my current code mostly solves the problem as given. It would be more of trying to explore other ways to solve it than adding something that was obvlisly "missing".
+
+#### Running the simulator code
 
 **Note: running the simulator with different choices of resolution and graphics quality may produce different results, particularly on different machines!  Make a note of your simulator settings (resolution and graphics quality set on launch) and frames per second (FPS output to terminal by `drive_rover.py`) in your writeup when you submit the project so your reviewer can reproduce your results.**
 
-My code seems to run fine in all resolutipon modes I've tested.  I tend to run in something like the thrid from the smllest.
+My code seems to run fine in all resolution modes I've tested.  I tend to run in something like the thrid from the smllest just so it doesn't fill my whole screen.
 
-The FPS is running about 15 (slow but seems fast enough).  I could speed that up by cleanign up the code and throwing away wasted prodessing that's not needed and optimizing what is.  Reaction times would become a problem if it ran much slower on a test mahine. I'm running on a new macbook pro and haven't tested on any other hardware.
+The FPS is running about 15 (slow but works fine).  I could speed that up by cleanign up the code and throwing away wasted prodessing that's not needed and optimizing what is.  Reaction times would become a problem if it ran much slower on a different machine. I'm running on a new macbook pro and haven't tested on any other hardware.  Running it as slow as 5 FPS might well still work.  At worse it could casuse the rover to crash a lot more (slow reaction times), which really isn't a problem other than slowing down how fast it will map the environment and find rocks.
+
+My code does learn to avoid bad areas. I did not pre-populate the stuck map with learned data so each time you re-start the simulator it will run into rocks a lot. But then over time, it learns to mostly avoid the dangerous rocks.  There is no hard coded map knowledge in my code.  It should work no a different game with similar ground and and rocks and walls, but a totally different map.  Loops in the toplogy would not be a problem for my code.
 
