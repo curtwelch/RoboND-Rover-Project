@@ -162,39 +162,39 @@ Below that is a green bar from the middle to the right. That's the throttle sett
 
 The angle of the blue trapezoid box of the "best path" code, is basically what the steering is set to.  Since the there is no mehanical delay in setting the steering angle (as there would be in a real rover), there is no control problem here. The control softare can instantly set the setting to anything it wants and it does. This creates a sickening behavior to watch howevert as it jerks the wheel all over the place randomly -- very unnatural like, but perfectly valid for this simulation.
 
-In fact, however, I set the starting to HALF of the path ahead value.  Setting the same value creates an oversteering and oscillation effect.  Setting it to half solves that.
+In fact, however, I set the steering to HALF of the path ahead angle value.  Setting the same value creates an oversteering and oscillation effect.  Setting it to half solves that.
 
 ##### Rocks
 
-The code will remember where it saw a rock for something like 4 seconds.  So if it only gets a quick glimpse, it will stay on the screen for 4 seconds, and the rover will try to go to that location.  This could ccreate issue is the world had lots of flse postives, but sine the world has almst none, we can trust that when we see yellow, it's a rock, and we can remember where se sw it, and try to go get it.
+The code will remember where it saw a rock for about like 4 seconds.  So if it only gets a quick glimpse, it will stay on the screen for 4 seconds, and the rover will try to go to that location.  This could ccreate issue if the world had lots of false postives, but sine the world has almost none, we can trust that when we see yellow, it's a rock, and we can remember where we saw it, and try to go get it.
 
-When the code sees a rock, it trnslates to a world location and remembers that. As the rover moves, and spins, the rocks location relative to the rover, is reverse calcuated from the world map location so the driving code always has a heading and distnce vector for where it "belivbes' the rock is even when it's lost sight of it. But after 4 aseconds, if it hasn't found it and grabbed it, it will "forget" it ever saw a rock, and move on with it's seachig of the world (it wil come back and find it if it's a real rock).
+When the code sees a rock, it translates to a world location and remembers that. As the rover moves, and spins, the rock's location relative to the rover, is reverse calcuated from the world map location so the driving code always has a heading and distance vector for where it "belives' the rock is even when it has lost sight of it. But after 4 aseconds, if it hasn't found it and grabbed it, it will "forget" it ever saw a rock, and move on with it's seaching of the world (it will come back and find it if it's a real rock).
 
-Seeing multiple rocks at the same time can cause problems (endles loop of swtiching between the two). And a few of the configurations of the rocks were obvoiusly set up to test just that problem by placing rocks on either side of the path.  My code deals with that by picking the "nearest" rock pixel it sees, to focus on, and by not changing it's focus, for this 4 second "memory" span, even if the first rock is lost site of, and a second rock shows up.  This is a simple solution to the more complex prob lem of tryign to tack the lcoation of multiple rocks. My code makes no attempt to track multiple rocks at the same time. It tracks only one.
+Seeing multiple rocks at the same time can cause problems (endles loop of switching between the two). And a few of the configurations of the rocks were obvoiusly set up to test just that problem by placing rocks on either side of the path.  My code deals with that by picking the "nearest" rock pixel it sees, to focus on, and by not changing it's focus, for this 4 second "memory" span, even if the first rock is lost site of, and a second rock shows up.  This is a simple solution to the more complex prob lem of tryign to tack the lcoation of multiple rocks. My code makes no attempt to track multiple rocks at the same time. It tracks only one.
 
-But with this 4-second focus window, the rover will likely get close to the rock it locked onto, and not be tempted to go after the other, once the 4-second window is up, and it must pick the "closest" rock again. In general, this seemed to solve the problem. Though the rover might bounce back and forth between two or three rocks for a bit, it will end up approaching one, and grab it, and not get stuck in an endless focus loop.
+But with this 4-second memory focus window, the rover will likely get close to the rock it locked onto, and not be tempted to go after the other. In general, this seemed to solve the problem. Though the rover might bounce back and forth between two or three rocks for a bit, it will end up approaching one, and grab it, and not get stuck in an endless focus loop.
 
 I have no code to catch such a loop, so if it did get stuck in such a loop looking at two rocks, my rover would not free itself from that loop.
 
 #### Decision Code
 
-All the above description was basically perception logic.  The perception code identifies the best paths, and speed, and where it belives rocks are.  But in its high-level choice of paths, it's creating the high-level decision behavior that guides the rover in its travel through the environment.
+All the above description was mostly perception logic.  The perception code identifies the best paths, and speed, and where it belives rocks are.  But in its high-level choice of paths, it's creating the high-level decision behavior that guides the rover in its travel through the environment.
 
-There is no path planning at all in my code for picking up rocks or exploring. It all works with simple logic of staying on the clear ground and trying to drive where you haven't driven before.
+There is no long distance path planning at all in my code for picking up rocks or exploring. It all works with simple heuristics of staying on the clear ground and trying to drive where you haven't driven before.
 
 The decision code in decision.py implements low-level heuristics for driving.
 
-Its implemented with 4 modes -- 'stop', 'forward', 'spin', and 'stuck'.  Rock hunting and grabbing happen as special-case code in all the states, it's not separate states.
+Its implemented with 4 modes -- 'stop', 'forward', 'spin', and 'stuck'.  Rock hunting and grabbing happen as special-case code in all the states, it's not broken into separate states.
 
-The basic idea is to keep driving forward at the recommended speed and angle from perception.  But when a rock is spotted, the decision code slows the rover, and turns to drive towards it. If it's too far off angle, the forward code just bumps to the stop mode.  Same is true when there is no path forward, -- just switch to stop mode.  In stop mode, it will pick up a rock if there's one to pick up, if there's a way forward, it goes back to forward drving node, if not, it will try to swith to spin to find a better path forward.
+The basic idea is to keep driving forward at the recommended speed and angle from perception.  But when a rock is spotted, the decision code slows the rover, and turns to drive towards it. If it's too far off angle, the forward code just bumps to the stop mode.  Same is true when there is no path forward -- just switch to stop mode.  In stop mode, it will pick up a rock if there's one to pick up, if there's a way forward, it goes back to forward drving node, if not, it will try to swith to spin to find a better path forward.
 
-Spin looks for a rock, or a good path forward, and takes it when it finds it. If it finds a rock, it goes to stop to grab it.
+Spin looks for a rock, or a good path forward, and takes it when it finds it. If it finds a rock, it stops to grab it.
 
 Forward and spin states both have logic to detect when they are stuck and switch to the stuck state. The stuck state, is not smart at all. It just tries a random move with random high throttle (up to 50 I think) that can be a spin, or forward or reverse move, in a random direction, of random steering, for a random time. Then it tries to use forward or spin to drive away. If it's still stuck, they will detect it, and return to "stuck" state to try something else random. it's not a fast escape, but it always seems to get itself free in this simple (and mostly safe) virtual world.
 
 ##### PID for throttle and brake
 
-I went through 3 different rewrites of the throttle and break controls and ended up with a straight forward PID to control both to regulate speed to the value set by the reset of the code.
+I went through 3 different rewrites of the throttle and break controls and ended up with a straight forward PID to control both.
 
 I tried to use negative throttle to regulate speed, but there's a bug (feature?) in the simulator that makes that not work well. When driving fast (over 3 m/s), even a small amount of negative throttle causes a physics warp to drop the speed down to below 2 m/s instantly. Not useful when trying to regulate the speed to 2.9 m/s and it keeps jumping down to 2, but takes a god bit of time to accelerate back up to 3.  It causes odd pumping and jerking effect that I didn't like.
 
