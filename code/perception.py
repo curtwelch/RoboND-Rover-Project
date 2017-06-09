@@ -181,6 +181,9 @@ def perception_step(Rover):
 
     # NOTE: camera image is coming to you in Rover.img
 
+    if 0:
+        print("\33[H\33[2J") # ANSI home and clear screen (not working due to timing)
+
     dst_size = 5 
     # Set a bottom offset to account for the fact that the bottom of the image 
     # is not the position of the rover but a bit in front of it
@@ -287,17 +290,18 @@ def perception_step(Rover):
 
     #
     # Order of angles in for list is important.
-    # Logic picks last one in list that is withing x percent of best v
-    # Whatever angles you want the rover to perfer, put them last.
-    # steer is set to half the path forward angle, which is why we check
-    # -30 to +30 even though steer is imited to -15 to 15.
+    # But I changed the code so it's different now,.
+    # Last angle is the one picked now when all are equal.
+    # But they are only equal at the beginning before it develops a history
+    # of paths then least travled path becomes the dominate factor
+    # in picking pahts (after top 10% velocity which is the major choice)
     #
 
     paths = []
 
     # This order creates follow left wall behavior (postive is to the left)
     #for angle in (-30, -20, -10, -5, -2, -1, 0, 1, 2, 5, 10, 20, 30):
-    for angle in (30, 20, 10, 5, 2, 1, 0, -1, -2, -5, -10, -20, -30):
+    for angle in (30, 20, 10, 5, 2, 1, 0, -1, -2, -5, -10, -20, -30): # follow left wall
     #for angle in (0, 1, -1, 2, -2, 5, -5, 10, -10, 20, -20, 30, -30):
         yoffset = np.sin(angle * np.pi / 180.0)
 
@@ -368,27 +372,27 @@ def perception_step(Rover):
 
     
     maxv = max([p[1] for p in paths])
-    print ("max v of paths is", maxv)
+    # print ("max v of paths is", maxv)
     # warning maxv can be negatie so the 90 percent test fails
     good_paths = [p for p in paths if p[1] == maxv or p[1] > maxv * 0.9]
 
-    print("good path angles are", [p[0] for p in good_paths])
+    # print("good path angles are", [p[0] for p in good_paths])
 
     min_visits = min([p[2] for p in good_paths])
 
-    print("min vists for good paths is", min_visits)
+    # print("min vists for good paths is", min_visits)
 
     best_path = None
     for p in good_paths:
         if p[2] == min_visits:
             best_path = p
-            print("found min visit path")
+            # print("found min visit path")
             break
 
     if best_path is None:
         best_path = good_paths[0] # just for safety
 
-    print("we picked path angle ", best_path[0])
+    # print("we picked path angle ", best_path[0])
 
     Rover.safe_angle = best_path[0]
     v = best_path[1]
@@ -563,43 +567,17 @@ def perception_step(Rover):
 
         Rover.visit_map[int(Rover.pos[1]), int(Rover.pos[0])] += 1
 
-        # Create visit map histogram for debuging
-        # print("nonzero visit map values:", Rover.visit_map[np.nonzero(Rover.visit_map)].flatten().astype(np.int))
-        if 0:
-            hist = np.zeros((20), dtype=np.int)
-            for i in Rover.visit_map[np.nonzero(Rover.visit_map)].flatten().astype(np.int):
-                if i < len(hist):
-                    hist[i] += 1
-            print("hist  is", hist)
+    if 1: ## Debug print out a small part of the visit/stuck map for where the rover is
+        print("")
+        print("Visit count MAP (near rover) used to force explore")
 
-        min_value = None;
-        minx = 100
-        miny = 100
-        Rover.min_visit_x = 100
-        Rover.min_visit_y = 100
-
-        for x in range(200):
-            for y in range(200):
-                v = Rover.visit_map[y][x]
-                if v > 10:
-                    if min_value is None or min_value > v:
-                        min_value = v
-                        minx = x
-                        miny = y
-
-        if min_value is not None:
-            Rover.min_visit_x = minx
-            Rover.min_visit_y = miny
-
-        print("Min visit x.y", Rover.min_visit_x, Rover.min_visit_y, "value is", Rover.visit_map[Rover.min_visit_y][Rover.min_visit_x])
-        mx = Rover.min_visit_x
-        my = Rover.min_visit_y
         mx = int(Rover.pos[0])
         my = int(Rover.pos[1])
-        for y in range(my+5, my-5, -1):
+
+        for y in range(my+5, my-6, -1):
             if y < 0 or y > 199:
                 continue
-            for x in range(mx - 5, mx + 5):
+            for x in range(mx - 5, mx + 6):
                 if x < 0 or x > 199:
                     continue
                 if Rover.stuck_map[y][x] > 0:
@@ -619,33 +597,14 @@ def perception_step(Rover):
     # to spin around in the righ direction to find it, so we need to remember
     # we saw it.
 
-    # Rover.rock_pixels = len(rxpix)
-    #new_rock_ok = True
+    if not Rover.see_rock and Rover.saw_rock and Rover.rock_forget_time < time.time():
+        # it's been many seconds and we didn't find it, forget we ever saw it.
+        #print("MEMORY OF ROCK FADES, TIME IS", time.time(), " saw it at ", Rover.saw_time)
+        Rover.saw_rock = False
 
-    if 0:
-        if Rover.rock_pixels > 1:
-            # We see at least one rock, maybe more
-            if Rover.see_rock:
-                # we see a rock now, but it might be a new one, or the same old rock.
-                # we don't want to keep swtiching focus to different rocks when two or more
-                # are in view. So keep focus on the old one for 3 seconds before allowing an update.
-                # this might make us keep going back and forth but we should be getting close to one
-                # than the other when we have one second to try and get closer.
-                if time.time() - Rover.saw_time > 3.0:
-                    new_rock_ok = True
-                    print("Switch to new rodk")
-                else:
-                    new_rock_ok = False # We are going to keep focus on the old one
-                    # But we need to update dist and angle for it,.
-                    print("EYES ON TARGET")
-                    Rover.update_rock(update_see=True)
-        else:
-            Rover.see_rock = False # it's gone
+    Rover.see_rock = False # only lists for one cycle, but saw_rock stays for seconds
 
-
-    # if Rover.rock_pixels > 1 and new_rock_ok:  # Must be more than 1 pix to count as a rock
-    Rover.see_rock = False
-    if not Rover.saw_rock and len(rxpix) > 1:
+    if not Rover.saw_rock and len(rxpix) > 0: # try allowing single pixels to activte
         # Try something new -- only update vision when memory of old fades
         Rover.see_rock = True
         Rover.rock_pixels = len(rxpix)
@@ -679,21 +638,8 @@ def perception_step(Rover):
         # rock_dist and rock_angle stay valid from last time we saw a rock
         # even if we don't currently see it
 
-    if not Rover.see_rock and Rover.saw_rock and Rover.rock_forget_time < time.time():
-        # it's been many seconds and we didn't find it, forget we ever saw it.
-        #print("MEMORY OF ROCK FADES, TIME IS", time.time(), " saw it at ", Rover.saw_time)
-        Rover.saw_rock = False
 
     # Hunt for invisible rocks!
-
-    if 0:
-        # fake the smell for testing but only if the real invissarock is not in the set
-        if (len(Rover.samples_pos) > 0 and Rover.samples_pos[0][0] != 70) and \
-            not Rover.saw_rock and not Rover.near_sample and not Rover.picking_up:
-            # Fake the smell of an invisble rock for testing invisa-rock code if we are close to the location
-            if np.sqrt((Rover.pos[0]-70.0)**2 + (Rover.pos[1]-87.0)**2) < 1:
-                print("FAKE ROCK SMELL")
-                Rover.near_sample = True
         
     if not Rover.saw_rock and not Rover.picking_up and Rover.near_sample: # Geiger counter is buzzing like crazy!
         Rover.saw_rock = True
@@ -704,7 +650,7 @@ def perception_step(Rover):
         Rover.worldmap[np.int_(Rover.rock_ypix_world), np.int_(Rover.rock_xpix_world)] = 1
         # The call to update_rock() will set the rest
 
-    Rover.update_rock() # only does sommething if we are in rock_saw mode
+    Rover.update_rock() # updates our relative angle and distance to the rock
 
     #
     # Collision detection
@@ -725,9 +671,9 @@ def perception_step(Rover):
             else:
                 Rover.min_a_brake = min(Rover.min_a_brake, a)
 
-            print("Acceleration is {:6.2f} b:{:1.0f} max brake {:6.2f} max no brake {:6.2f}". \
-                format(a, Rover.brake, Rover.min_a_brake, Rover.min_a_nobrake))
-            print("dt is {:8.4f}".format(dt))
+            #print("Acceleration is {:6.2f} b:{:1.0f} max brake {:6.2f} max no brake {:6.2f}". \
+                #format(a, Rover.brake, Rover.min_a_brake, Rover.min_a_nobrake))
+            #print("dt is {:8.4f}".format(dt))
 
 
 
@@ -758,8 +704,11 @@ def perception_step(Rover):
                 format(Rover.rock_angle, Rover.rock_dist, Rover.rock_pixels))
 
     print("")
-    print("rocks:", Rover.samples_pos)
+    
+    # print("rocks:", Rover.samples_pos)
 
     #print("Rover pos", Rover.pos, " Rocks to find:", Rover.samples_pos)
 
     return Rover
+
+

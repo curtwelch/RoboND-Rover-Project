@@ -229,7 +229,7 @@ def decision_drive_PID(Rover):
         print("PID err:{:5.2f}  sum:{:5.2f} dif:{:5.2f}".format(err, sum, diff))
         print("      P:{:5.2f}    I:{:5.2f}   D:{:5.2f}".format(p*err, i*sum, d*diff))
         print("      t:{:5.2f} clip:{:5.2f}".format(throttle, Rover.throttle_current))
-    print("PID Sum is {:5.2f}".format(sum))
+    # print("PID Sum is {:5.2f}".format(sum))
 
     Rover.throttle = np.clip(Rover.throttle_current, 0.0, Rover.throttle_max)
     Rover.brake = np.clip(-Rover.throttle_current, 0.0, Rover.brake_max)
@@ -270,7 +270,7 @@ def decision_mode_stop(Rover):
 
         if not Rover.picking_up:
             Rover.send_pickup = True
-            Rover.rock_forget_time = time.time() # time to forget we ever saw it
+            Rover.rock_forget_time = time.time() + 2 # time to forget we ever saw it
             return Rover
 
         # Otherwise, it's picking up, so just wait.

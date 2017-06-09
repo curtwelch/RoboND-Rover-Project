@@ -105,9 +105,6 @@ class RoverState():
 
         self.stuck_map = np.zeros((200, 200), dtype=np.float) # Tracks grid places to avoid
 
-        self.min_visit_x = 100 # experimental but not used currently 
-        self.min_visit_y = 100
-
         #
         # Decision control
         #
