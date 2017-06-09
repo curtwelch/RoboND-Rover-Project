@@ -252,3 +252,19 @@ My code does learn to avoid bad areas. I did not pre-populate the stuck map with
 
 **WARNING** -- Using manual override for too long can make the rover belive it's stuck.  It will mark the locaiton on the map as bad and avoid it in the future, even though the only "bad" thing is that a "giant" decided to grab it and keep it from moving.  It will also go into escape mode and act confused and scarred and psychotic. This is all normal. It's not broken.:)
 
+#### Udacity Bugs
+
+##### Drunk Driving
+
+Drunk Driving -- There was a bug in the drive_rover.sp from Udacity that I fixed in my version of the code and submitted a pull request for to the Udacity repo.  When picking up rocks, the udacity code would send both a pickup requiest to the simulator, AND the normal control commands. This caused the simulator to send back two new telemitry packets, not just one.  So it caused the rover code to have a cached frame and be a frame behind in the processong. But it was worse than that, beause the code send the command first. So the first telemtry data back, did not include a "pickin up" mode flag. So the rover code would send a second request to pick up.  Putting it two frames behind the simulator.
+
+So for each rock picked up, the rover would fall 2 frames behind the simulator. This created a control delay problem where the response time of the rover got worse and worse for each rock it picked up. It's as if the rover wasd getting "drunk" from the rocks!  Funny thing. But it drove me CRAZY trying to unerstand why my rover's abiulity to drive kept gettig worse.  I finally traked it down and fixed, and now, it's immune to the toxic effects of the rocks. :)
+
+##### Rock Pickup hang
+
+I did not report this. It's rare.  But it's possible for the simulator to detect that the rover is near the rock, have the drive code tell it to pick up, and the simulator then sets the "picking up" flag. But then the rover MOES away from the rock (physics at work), and the simulator will no longer be able to reach the rock. But the simulator just hangs at this point.  It's in rock pickup mode, but not pickig up rocks, and not allowing the drive code to send more commands.  I could not fix this from my side of the code.
+
+##### Velocity Time Warp on negative throttle
+
+I descirbed this above.  You might call this a feature instead of a bug, but the physics is non life-like for this.  When the rover is traveling faster than about 3 m/s, and negative throttle is applied (should create slow brake effect), the speed of the rover can take a time warp jump down from 3 m/s to 2 m/s in what I think is one update cycle (massive negative acceleration).  This messes up the PID from being able to use negative throttle to control speed.  I did not carefully explore this issue, I just gave up on using it.  I could help debug this and produce better documention of the effect if it would help you guys. Just let me know.
+
