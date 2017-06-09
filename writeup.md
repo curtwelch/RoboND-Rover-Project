@@ -2,7 +2,7 @@
 ### Writeup by Curt Welch <curt@kcwc.com> for Project 1
 ### June 9th, 2017
 
-### Jerky -- what I call my rover
+### Jerky the Rover
 
 ---
 
