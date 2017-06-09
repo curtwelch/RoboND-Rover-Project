@@ -1,6 +1,8 @@
 ## Project: Search and Sample Return
 ### Writeup by Curt Welch <curt@kcwc.com> for Project 1
-### Jun 9th, 2017
+### June 9th, 2017
+
+### Jerky -- what I call my rover
 
 ---
 
@@ -12,9 +14,9 @@
 
 #### My Writeup -- Yes, here it is!
 
-I'm runing a bit behind.  I hope to catch up.  I wasn't able to start this projet until the due date last Wednesday and I've been putting in 12 hours day for the last week having great fun with this project. I've done a bit more than the project required.
+I'm runing a bit behind.  I will catch up.  I wasn't able to start this projet until the due date last Wednesday and I've been putting in 12 hours day for the last week having great fun with this project. I've done a bit more than the project required but I find it hard to stop the cycle of endless improvements.
 
-My submited project can be found in the project_1 branch of my reposity (not the main branch).
+My submited project can be found in the project_1 branch of my GIT reposity (not the master branch).
 
 https://github.com/curtwelch/RoboND-Rover-Project/tree/project_1
 
@@ -38,9 +40,9 @@ I tried MANY different values for the ground selection thresholds. But in the en
 
 #### Rubric 2b: Populate the `process_image()` function with the appropriate analysis steps to map pixels identifying navigable terrain, obstacles and rock samples into a worldmap.  Run `process_image()` on your test data using the `moviepy` functions provided to create video output of your result. 
 
-Yes I did all that, and then a lot more in my actual code. Here's the mp4 that I created:
+Yes I did all that, and then a lot more in my actual code. Here's the last mp4 that I created in my experimenting. I think.  It was what I found left in my output directory.
 
-[test_mapping.mp4](https://github.com/curtwelch/RoboND-Rover-Project/blob/project_1/output/test_mapping.mp4)
+https://github.com/curtwelch/RoboND-Rover-Project/blob/project_1/output/test_mapping.mp4
 
 
 ### Rubric 3: Autonomous Navigation and Mapping
@@ -140,6 +142,8 @@ The other reason for using the "left haned" rule is sort of cheating. That one r
 
 ##### Rover Vision Screen
 
+![Vision Screen Exmaple](https://github.com/curtwelch/RoboND-Rover-Project/blob/project_1/IMG/Jerky.png)
+
 The rover vision data shown on the screen has multiple things being displayed on it. But it includes the spread of "safe" "sand" pixels (in green), as well as the "path ahead" box in blue.  So you can watch as the code is picking different paths ahead.  There is no implicit display of obstical pixels. Anything that is not "safe" is undersood as "not safe".
 
 When grid locations get marked as "stuck" (aka bad), you can see that in the green "sand" pixels. It shows up as an empty square in the fan display that the rover knows to try and avoid.
@@ -147,6 +151,8 @@ When grid locations get marked as "stuck" (aka bad), you can see that in the gre
 The background of the diplay is a copy of the rover image.  Having it overlaid helped me see the relation between the two easier.
 
 When a rock is spoted, the screen flashes "ROCK", and the location on the sand pixle map (warpped image) is shown. Not it's location on the background raw image.
+
+![Rock Pickup](https://github.com/curtwelch/RoboND-Rover-Project/blob/project_1/IMG/RockPickup.png)
 
 When the rover is stuck, it will display "ESCAPE" on the screen as it alternates between some random escape manuvior, and tryign to drive out -- which returns to the studk mode if driving isn't working.
 
@@ -186,7 +192,7 @@ Spin looks for a rock, or a good path forward, and takes it when it finds it. If
 
 Forward and spin states both have logic to detect when they are stuck and switch to the stuck state. The stuck state, is not smart at all. It just trys a random move with random high throttle (up to 50 I thinnk) that can be a spin, or forward or revese move, in a random direction, of random steering, for a random time. Then it tries to use forward or spin to drive away. If it's still stuck, they will detect it, and reutrn to "stuck" state to try someyhing else random. it's not a fast escape, but it always seems to get itself free in this simple (and mostly safe) virtual world.
 
-##### PID for throttle and brake.
+##### PID for throttle and brake
 
 I went through 3 different rewrites of the throttle and break controls and ended up with a straight forward PID to control both to regualte speed to the value set by the reset of the code.
 
@@ -243,4 +249,6 @@ My code seems to run fine in all resolution modes I've tested.  I tend to run in
 The FPS is running about 15 (slow but works fine).  I could speed that up by cleanign up the code and throwing away wasted prodessing that's not needed and optimizing what is.  Reaction times would become a problem if it ran much slower on a different machine. I'm running on a new macbook pro and haven't tested on any other hardware.  Running it as slow as 5 FPS might well still work.  At worse it could casuse the rover to crash a lot more (slow reaction times), which really isn't a problem other than slowing down how fast it will map the environment and find rocks.
 
 My code does learn to avoid bad areas. I did not pre-populate the stuck map with learned data so each time you re-start the simulator it will run into rocks a lot. But then over time, it learns to mostly avoid the dangerous rocks.  There is no hard coded map knowledge in my code.  It should work no a different game with similar ground and and rocks and walls, but a totally different map.  Loops in the toplogy would not be a problem for my code.
+
+**WARNING** -- Using manual override for too long can make the rover belive it's stuck.  It will mark the locaiton on the map as bad and avoid it in the future, even though the only "bad" thing is that a "giant" decided to grab it and keep it from moving.  It will also go into escape mode and act confused and scarred and psychotic. This is all normal. It's not broken.:)
 
