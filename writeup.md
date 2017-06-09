@@ -1,54 +1,58 @@
 ## Project: Search and Sample Return
-### Writeup Template: You can use this file as a template for your writeup if you want to submit it as a markdown file, but feel free to use some other method and submit a pdf if you prefer.
+### Writeup for Curt Welch <curt@kcwc.com> for Project 1
+### Jun 9th, 2017
 
 ---
 
 
-**The goals / steps of this project are the following:**  
-
-**Training / Calibration**  
-
-* Download the simulator and take data in "Training Mode"
-* Test out the functions in the Jupyter Notebook provided
-* Add functions to detect obstacles and samples of interest (golden rocks)
-* Fill in the `process_image()` function with the appropriate image processing steps (perspective transform, color threshold etc.) to get from raw images to a map.  The `output_image` you create in this step should demonstrate that your mapping pipeline works.
-* Use `moviepy` to process the images in your saved dataset with the `process_image()` function.  Include the video you produce as part of your submission.
-
-**Autonomous Navigation / Mapping**
-
-* Fill in the `perception_step()` function within the `perception.py` script with the appropriate image processing functions to create a map and update `Rover()` data (similar to what you did with `process_image()` in the notebook). 
-* Fill in the `decision_step()` function within the `decision.py` script with conditional statements that take into consideration the outputs of the `perception_step()` in deciding how to issue throttle, brake and steering commands. 
-* Iterate on your perception and decision function until your rover does a reasonable (need to define metric) job of navigating and mapping.  
-
-[//]: # (Image References)
-
-[image1]: ./misc/rover_image.jpg
-[image2]: ./calibration_images/example_grid1.jpg
-[image3]: ./calibration_images/example_rock1.jpg 
-
-## [Rubric](https://review.udacity.com/#!/rubrics/916/view) Points
-### Here I will consider the rubric points individually and describe how I addressed each point in my implementation.  
+## [Rubric](https://review.udacity.com/#!/rubrics/916/view) Points 
 
 ---
 ### Writeup / README
 
-#### 1. Provide a Writeup / README that includes all the rubric points and how you addressed each one.  You can submit your writeup as markdown or pdf.  
+#### 1. Provide a Writeup -- Yes, here it is!
 
-You're reading it!
 
 ### Notebook Analysis
-#### 1. Run the functions provided in the notebook on test images (first with the test data provided, next on data you have recorded). Add/modify functions to allow for color selection of obstacles and rock samples.
+
+I'm not going to describe what I did with the notebook. At this point, I honeastly don't remember. It was 100 hours of work in the past...  I hope that's ok. I'll skip straight to the describing the points about the code itself.
+
+
+#### 1. color selection of obstacles and rock samples.
 Here is an example of how to include an image in your writeup.
 
-![alt text][image1]
+Rock selection I did by writting yellow_thresh() which checks for yellow collors.  Since Yellow is (255, 255, 0), my function is almost identical to the ground selection, except for the blue value, it checks for values LESS THAN the given parameter. I spend hours twiking the values of the threshold numbers, but the last numbers I used are (90, 90, 60).  So all pixels with R and G above 90, and B below 60 are considered to be potential ROck pixels.  I've only seen one flase positive in this vitural world using this approach -- and it's spuratic so it doesn't cause the rover to lock onto a location looking for a rock that isn't there.
+
+Obsticals are everything that is not ground or rock.
+
+I tried MANY different values for the ground selection thresholds. But in the end, I just went back to the suggested (160, 160, 160) values. The simulation has different colors depending on what time of day and where the sun is in the simulation and though 160 seems too dark for many test runs, some of the "darker days" in the simualtion need the lower values.
 
 #### 1. Populate the `process_image()` function with the appropriate analysis steps to map pixels identifying navigable terrain, obstacles and rock samples into a worldmap.  Run `process_image()` on your test data using the `moviepy` functions provided to create video output of your result. 
-And another! 
 
-![alt text][image2]
+Ok, I played with that. But it has little to do with what's in my current code.  Here's the mp4 that I was playing with..
+
+
+![alt text][output/test_mapping.mp4]
+
+
 ### Autonomous Navigation and Mapping
 
 #### 1. Fill in the `perception_step()` (at the bottom of the `perception.py` script) and `decision_step()` (in `decision.py`) functions in the autonomous mapping scripts and an explanation is provided in the writeup of how and why these functions were modified as they were.
+
+OK, so I wrote a LOT of code.  And threw away 10 times as much as I kept as I explored many different algoirthms for controlling the rover.  So much fun I've found it hard to stop playing with it and move on to the rest of the course.  I'll just descibe the version I've submitted here.
+
+My current version is genrally able to reach over 80% accuracy on map fidelity and and percent mapped.  Though the longer it runs, the more "edge" pizels get added with ups the Mapped percent and lowers the Fidelity any time one of the pixels my code considers part of the map falls outside of the reference ground truth map used for scoring.  My code is always able to make the entire area.
+
+My code picks up the rocks, and MOST the time, will get all 6 rocks if you let it run long enough (15 minuites or so).  But there is one very hard to see rock, that I don't think my code will find on it's own, and one invisble rock (below the surface) that I've never seen my rover find on it's own.  So for those two random starting positions, I don't think my rover code will find them -- but it MIGHT because if the rover gets close enough, and sets off the "near object" flag, mu code will stop and grab the rock.  And the code as I finsished it tnoght, will search the entire map over and over, so it might find the if alowed to run for hours.
+
+So lets me overview the major features of the code...
+
+# Perception
+
+# Decision
+
+
+
 
 
 #### 2. Launching in autonomous mode your rover can navigate and map autonomously.  Explain your results and how you might improve them in your writeup.  
