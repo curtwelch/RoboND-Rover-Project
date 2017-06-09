@@ -150,8 +150,8 @@ def perspect_transform_old(img, src, dst):
 # Skip processing of new video frames to speed up FPS
 
 Skip_ratio = 2.0/3.0 ## Skip 2 out of 3
-Skip_ratio = 0.0 # Don't skip anything
 Skip_ratio = 1.0/2.0 ## Skip 1 out of 2
+Skip_ratio = 0.0 # Don't skip anything
 Skip_cnt = 0.0
 FramesSkipped = 0.0
 FramesTotal = 0.0
@@ -288,14 +288,20 @@ def perception_step(Rover):
     #
     # Order of angles in for list is important.
     # Logic picks last one in list that is withing x percent of best v
-    # Whatever angles you want the rover to perfer, put them last
+    # Whatever angles you want the rover to perfer, put them last.
+    # steer is set to half the path forward angle, which is why we check
+    # -30 to +30 even though steer is imited to -15 to 15.
     #
 
-    # This order creates follow left wall behavior (postive is to the left)
-    for angle in (-30, -20, -10, -5, -2, 0, 2, 5, 10, 20, 30):
-        xoffset = np.sin(angle * np.pi / 180.0)
+    paths = []
 
-        fxylist  = [xy for xy in zip(sxpix, sypix) if xy[0] <= safe_zone_depth and abs(xy[1]-xoffset*xy[0]) <= safe_zone_width/2]
+    # This order creates follow left wall behavior (postive is to the left)
+    #for angle in (-30, -20, -10, -5, -2, -1, 0, 1, 2, 5, 10, 20, 30):
+    for angle in (30, 20, 10, 5, 2, 1, 0, -1, -2, -5, -10, -20, -30):
+    #for angle in (0, 1, -1, 2, -2, 5, -5, 10, -10, 20, -20, 30, -30):
+        yoffset = np.sin(angle * np.pi / 180.0)
+
+        fxylist  = [xy for xy in zip(sxpix, sypix) if xy[0] <= safe_zone_depth and abs(xy[1]-yoffset*xy[0]) <= safe_zone_width/2]
         fxpix = [xy[0] for xy in fxylist]
         fypix = [xy[1] for xy in fxylist]
 
@@ -337,25 +343,63 @@ def perception_step(Rover):
 
         # print("Check path for angle {:5.1f} v is {:6.1f}".format(angle, v), end='')
 
+        # Motivate the rover to drive over places less visited in the past (explore)
+        # sum the total visit count for this path forward.  No, wait  Lets cheat. It's
+        # hard to overlay the wrold grids over the path forwward.  But lets just
+        # find the ONE grid that is at the center of the end of the path and find it's
+        # value!
+
+        x = safe_zone_depth
+        y = yoffset * safe_zone_depth
+        wx, wy = pix_to_world(x, y, Rover.pos[0], Rover.pos[1], Rover.yaw, world_size, world_scale)
+        visits = Rover.visit_map[wy,wx]
+
+        # print("  visit[{:3.0f},{:3.0f}]= {:3.0f}".format(wx, wy, visits))
+
         #if best_angle is None or v > best_v or angle == 0 and v == best_v:
             # pick angle 0 -- straight ahead on tie for best
 
-        if best_angle is None or v > largest_v * 0.99:
-            best_angle = angle
-            best_v = v
-            if largest_v is None:
-                largest_v = v
-            largest_v = max(largest_v, v)
-            best_fxpix = fxpix
-            best_fypix = fypix
-            # print(" Best", end='') # so far
+        paths.append((angle, v, visits, fxpix, fypix)) # save the path details
 
-        # print()
+    #
+    # Build a good path list from the list of path options
+    # All paths within 90% of best velocity are "good".
+    #
 
-    v = best_v
-    Rover.safe_angle = best_angle
-    fxpix = best_fxpix
-    fypix = best_fypix
+    
+    maxv = max([p[1] for p in paths])
+    print ("max v of paths is", maxv)
+    # warning maxv can be negatie so the 90 percent test fails
+    good_paths = [p for p in paths if p[1] == maxv or p[1] > maxv * 0.9]
+
+    print("good path angles are", [p[0] for p in good_paths])
+
+    min_visits = min([p[2] for p in good_paths])
+
+    print("min vists for good paths is", min_visits)
+
+    best_path = None
+    for p in good_paths:
+        if p[2] == min_visits:
+            best_path = p
+            print("found min visit path")
+            break
+
+    if best_path is None:
+        best_path = good_paths[0] # just for safety
+
+    print("we picked path angle ", best_path[0])
+
+    Rover.safe_angle = best_path[0]
+    v = best_path[1]
+    fxpix = best_path[3]
+    fypix = best_path[4]
+
+    if 0:
+        v = best_v
+        Rover.safe_angle = best_angle
+        fxpix = best_fxpix
+        fypix = best_fypix
 
     Rover.safe_vel = v # Not clipped -- will be negative for bad options
 
@@ -574,13 +618,37 @@ def perception_step(Rover):
     # By the time we stop, the rock is no longer in our vision.  We must try
     # to spin around in the righ direction to find it, so we need to remember
     # we saw it.
-    #
 
+    # Rover.rock_pixels = len(rxpix)
+    #new_rock_ok = True
+
+    if 0:
+        if Rover.rock_pixels > 1:
+            # We see at least one rock, maybe more
+            if Rover.see_rock:
+                # we see a rock now, but it might be a new one, or the same old rock.
+                # we don't want to keep swtiching focus to different rocks when two or more
+                # are in view. So keep focus on the old one for 3 seconds before allowing an update.
+                # this might make us keep going back and forth but we should be getting close to one
+                # than the other when we have one second to try and get closer.
+                if time.time() - Rover.saw_time > 3.0:
+                    new_rock_ok = True
+                    print("Switch to new rodk")
+                else:
+                    new_rock_ok = False # We are going to keep focus on the old one
+                    # But we need to update dist and angle for it,.
+                    print("EYES ON TARGET")
+                    Rover.update_rock(update_see=True)
+        else:
+            Rover.see_rock = False # it's gone
+
+
+    # if Rover.rock_pixels > 1 and new_rock_ok:  # Must be more than 1 pix to count as a rock
     Rover.see_rock = False
-    Rover.rock_pixels = len(rxpix)
-
-    if Rover.rock_pixels > 1:  # Must be more than 1 pix to cont as rock
+    if not Rover.saw_rock and len(rxpix) > 1:
+        # Try something new -- only update vision when memory of old fades
         Rover.see_rock = True
+        Rover.rock_pixels = len(rxpix)
 
         dists, angles = to_polar_coords(rxpix, rypix)
 
@@ -599,7 +667,7 @@ def perception_step(Rover):
         Rover.rock_ypix = rypix[i]
 
         Rover.rock_xpix_world, Rover.rock_ypix_world = pix_to_world(Rover.rock_xpix, Rover.rock_ypix,
-                Rover.pos[0], Rover.pos[1], Rover.yaw, world_size, world_scale, truncate=False)
+            Rover.pos[0], Rover.pos[1], Rover.yaw, world_size, world_scale, truncate=False)
 
         dists = None
         angles = None
@@ -640,6 +708,8 @@ def perception_step(Rover):
 
     #
     # Collision detection
+    # When we run into something, we remember it and avoid that area in the
+    # future.
     #
 
     if Rover.last_vel is not None and Rover.mode == "forward" and Rover.last_vel > 1.0:

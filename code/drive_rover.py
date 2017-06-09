@@ -161,7 +161,7 @@ class RoverState():
         self.samples_found = 0 # To count the number of samples found
         self.near_sample = 0 # Will be set to telemetry value data["near_sample"]
 
-    def update_rock(self):
+    def update_rock(self, update_see=True):
         # Update memory of the rock we saw but no longer see.
         # If we are in "saw_rock" mode, update the rock angle and dist
         # from the saved world xpix and ypix given the current rover position
@@ -171,7 +171,14 @@ class RoverState():
         # rock_angle is degrees +- 10
         # Rover.yaw is degrees 0 to 360
 
-        if self.saw_rock and not self.see_rock:
+        # normally, we only do this update when see_rock is off, and saw_rock
+        # is on -- meaning we don't see the rock anymore,  But if the update_see
+        # flat is True, we update anyway.
+
+        # Changed default of update_see to True -- tryig something different
+        # as a quick hack for the two rock fight problem
+
+        if self.saw_rock and (update_see or not self.see_rock):
            self.rock_dist = np.sqrt((self.pos[0] - self.rock_xpix_world)**2 +
                                 (self.pos[1] - self.rock_ypix_world)**2) * 10.0 
            self.rock_angle = np.arctan2(self.rock_ypix_world - self.pos[1],
