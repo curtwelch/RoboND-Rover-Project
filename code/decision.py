@@ -4,6 +4,9 @@ import random
 import sys
 import time
 
+# This version modified by Curt Welch <curt@kcwc.com> for
+# Udaicity Robotics Nano Degree project 1, June 2017
+
 def decision_set_stuck(Rover, forward=False):
     # Oh crap -- try something random for a random bit of time
 

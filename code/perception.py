@@ -4,6 +4,9 @@ import math
 import sys
 import time
 
+# This version modified by Curt Welch <curt@kcwc.com> for
+# Udaicity Robotics Nano Degree project 1, June 2017
+
 # return the mean distances and mean angles for a list of polar (dist, angle) points
 # Needed this function to deal with null lists correclty
 def vector_means(v):
@@ -704,7 +707,7 @@ def perception_step(Rover):
                 format(Rover.rock_angle, Rover.rock_dist, Rover.rock_pixels))
 
     print("")
-    
+
     # print("rocks:", Rover.samples_pos)
 
     #print("Rover pos", Rover.pos, " Rocks to find:", Rover.samples_pos)

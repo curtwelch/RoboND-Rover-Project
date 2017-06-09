@@ -17,6 +17,9 @@ import matplotlib.image as mpimg
 import time
 import sys
 
+# This version modified by Curt Welch <curt@kcwc.com> for
+# Udaicity Robotics Nano Degree project 1, June 2017
+
 # Import functions for perception and decision making
 from perception import perception_step
 from decision import decision_step

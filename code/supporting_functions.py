@@ -6,6 +6,9 @@ import base64
 import time
 import sys
 
+# This version modified by Curt Welch <curt@kcwc.com> for
+# Udaicity Robotics Nano Degree project 1, June 2017
+
 # Define a function to convert telemetry strings to float independent of decimal convention
 def convert_to_float(string_to_convert):
       if ',' in string_to_convert:
