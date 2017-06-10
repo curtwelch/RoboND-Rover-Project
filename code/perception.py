@@ -214,6 +214,8 @@ def perception_step(Rover):
     sand_rgb_thresh=(190,170,160)
     # sand_rgb_thresh=(180,170,160)
     sand_rgb_thresh=(160,160,160)
+    sand_rgb_thresh=(150,150,150) # Test darker to see what happens (worked fine 81% fidelity)
+    sand_rgb_thresh=(120,120,120) # Test darker to see what happens (worked fine 81% fidelity)
 
     rock_rgb_thresh=(150,150,100)
     rock_rgb_thresh=(100,100,60)
@@ -576,18 +578,24 @@ def perception_step(Rover):
 
         mx = int(Rover.pos[0])
         my = int(Rover.pos[1])
+        sz = 10
 
-        for y in range(my+5, my-6, -1):
+        for y in range(my+sz, my-sz-1, -1):
             if y < 0 or y > 199:
                 continue
-            for x in range(mx - 5, mx + 6):
+            for x in range(mx - sz, mx + sz + 1):
                 if x < 0 or x > 199:
                     continue
                 if Rover.stuck_map[y][x] > 0:
                     v = -Rover.stuck_map[y][x]
                 else:
                     v = Rover.visit_map[y][x]
-                if v == 0.0:
+                v = np.clip(v, -9, 999)
+                if x == mx and y == my:
+                    print("*{:3.0f}".format(v), end='')
+                elif v < 0:
+                    print("=={:2.0f}".format(v), end='')
+                elif v == 0.0:
                     print("   .", end='')
                 else:
                     print("{:4.0f}".format(v), end='')
